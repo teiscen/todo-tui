@@ -5,9 +5,10 @@ import (
 	"log"
 
 	"todo-tui/jsonmanager"
+	"todo-tui/tui"
 )
 
-func main() {
+func testJSON() {
 	filePathRead := "artifacts/todoread.json"
 	tasks, err := jsonmanager.ReadJson(filePathRead)
 	if err != nil {
@@ -25,4 +26,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func main() {
+	// testJSON()
+	tui.TestTUI()
 }
