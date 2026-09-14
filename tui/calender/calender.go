@@ -27,8 +27,8 @@ func initialModel() model {
 	return model{
 		daySelected:  0,
 		pageSelected: 0,
-		style:        singleCalenderStyle{},
-		// style:         doubleCalenderStyle{},
+		// style:        singleCalenderStyle{},
+		style:         doubleCalenderStyle{},
 		calenderPages: mockCalenderPages,
 	}
 }
@@ -61,7 +61,7 @@ func (m model) View() tea.View {
 		cells = append(cells, m.style.invalidRenderer(ColorInvalid))
 	}
 	for i := 0; i < int(getNumOfDays()); i++ {
-		cells = append(cells, m.style.cellRenderer(ColorValid))
+		cells = append(cells, m.style.cellRenderer(ColorValid, false))
 	}
 	for i := 0; i < int(getLastDay()); i++ {
 		cells = append(cells, m.style.invalidRenderer(ColorInvalid))
@@ -70,10 +70,9 @@ func (m model) View() tea.View {
 	entryToIndex := func(entry time.Time) int {
 		return int(getFirstDay()) + entry.Day()
 	}
-
 	for _, e := range m.calenderPages[m.pageSelected].entries {
 		color := m.calenderPages[m.pageSelected].color
-		cells[entryToIndex(e)] = m.style.cellRenderer(color)
+		cells[entryToIndex(e)] = m.style.cellRenderer(color, true)
 	}
 
 	var weeks []string
@@ -89,8 +88,13 @@ func (m model) View() tea.View {
 	header := m.style.weekdayRenderer()
 	sep := "\n" + strings.Repeat("\n", m.style.getRowSpacing())
 	weeksBlock := strings.Join(weeks, sep)
-	grid := header + "\n" + weeksBlock
-	return tea.NewView(grid)
+	grid := header + "\n" + weeksBlock + "\n"
+
+	complete := genBorder(grid, ColorValid,
+		"Sept 10", ColorValid, true,
+		"Label", m.calenderPages[m.pageSelected].color, true)
+
+	return tea.NewView(complete)
 }
 
 func TestCalender() {

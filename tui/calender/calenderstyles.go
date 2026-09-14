@@ -7,7 +7,7 @@ type calenderStyle interface {
 	getRowSpacing() int
 	weekdayRenderer() string
 	invalidRenderer(c ThemeColor) string
-	cellRenderer(c ThemeColor) string
+	cellRenderer(c ThemeColor, isBold bool) string
 	selectedRenderer(c ThemeColor) string
 }
 
@@ -32,6 +32,7 @@ func (s doubleCalenderStyle) weekdayRenderer() string {
 			Bold(true).Render(str)
 		return out
 	}
+	out += "\n"
 	out += temp(ColorRed, "Su")
 	out += temp(ColorValid, "Mo")
 	out += temp(ColorValid, "Tu")
@@ -39,6 +40,7 @@ func (s doubleCalenderStyle) weekdayRenderer() string {
 	out += temp(ColorValid, "Th")
 	out += temp(ColorValid, "Fr")
 	out += temp(ColorRed, "Sa")
+	out += "\n"
 	return out
 }
 
@@ -48,9 +50,9 @@ func (s doubleCalenderStyle) invalidRenderer(c ThemeColor) string {
 		Render(largeHexRing)
 }
 
-func (s doubleCalenderStyle) cellRenderer(c ThemeColor) string {
+func (s doubleCalenderStyle) cellRenderer(c ThemeColor, isBold bool) string {
 	return c.toStyle().
-		Width(s.getColumnWidth()).Align(lipgloss.Center).
+		Width(s.getColumnWidth()).Align(lipgloss.Center).Bold(isBold).
 		Render(largeCircle)
 }
 
@@ -63,7 +65,7 @@ func (s doubleCalenderStyle) selectedRenderer(c ThemeColor) string {
 
 // Single Calender Styles
 func (singleCalenderStyle) getColumnWidth() int {
-	return 2
+	return 3
 }
 
 func (singleCalenderStyle) getRowSpacing() int {
@@ -75,9 +77,10 @@ func (s singleCalenderStyle) weekdayRenderer() string {
 	temp := func(c ThemeColor, str string) string {
 		out := c.toStyle().
 			Width(s.getColumnWidth()).Align(lipgloss.Center).
-			Bold(true).Render(str)
+			Bold(false).Render(str)
 		return out
 	}
+	out += "\n"
 	out += temp(ColorRed, "S")
 	out += temp(ColorValid, "M")
 	out += temp(ColorValid, "T")
@@ -85,6 +88,7 @@ func (s singleCalenderStyle) weekdayRenderer() string {
 	out += temp(ColorValid, "T")
 	out += temp(ColorValid, "F")
 	out += temp(ColorRed, "S")
+	out += "\n"
 	return out
 }
 
@@ -94,9 +98,9 @@ func (s singleCalenderStyle) invalidRenderer(c ThemeColor) string {
 		Render(smallRing)
 }
 
-func (s singleCalenderStyle) cellRenderer(c ThemeColor) string {
+func (s singleCalenderStyle) cellRenderer(c ThemeColor, isBold bool) string {
 	return c.toStyle().
-		Width(s.getColumnWidth()).Align(lipgloss.Center).
+		Width(s.getColumnWidth()).Align(lipgloss.Center).Bold(isBold).
 		Render(smallCircle)
 }
 
