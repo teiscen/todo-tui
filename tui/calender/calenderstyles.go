@@ -57,7 +57,7 @@ func (s doubleCalenderStyle) cellRenderer(c ThemeColor, isBold bool) string {
 }
 
 func (s doubleCalenderStyle) selectedRenderer(c ThemeColor) string {
-	content := ">" + largeCircle + "<"
+	content := "[" + largeCircle + " ]"
 	return c.toStyle().
 		Width(s.getColumnWidth()).Align(lipgloss.Center).
 		Bold(true).Render(content)
