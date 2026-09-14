@@ -3,10 +3,11 @@ package calender
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+	lipgloss "charm.land/lipgloss/v2"
 )
 
 type calenderPage struct {
@@ -17,14 +18,17 @@ type calenderPage struct {
 type model struct {
 	daySelected   int
 	pageSelected  int
+	style         calenderStyle
 	calenderPages []calenderPage
 }
 
 // Need to populate the calenderPages from a config file
 func initialModel() model {
 	return model{
-		daySelected:   0,
-		pageSelected:  0,
+		daySelected:  0,
+		pageSelected: 0,
+		style:        singleCalenderStyle{},
+		// style:         doubleCalenderStyle{},
 		calenderPages: mockCalenderPages,
 	}
 }
@@ -38,42 +42,55 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c", "q", "shift-c":
 			return m, tea.Quit
+		case "h", "left":
+			index := (m.pageSelected - 1 + len(m.calenderPages)) % len(m.calenderPages)
+			m.pageSelected = index
+		case "l", "right":
+			index := (m.pageSelected + 1) % len(m.calenderPages)
+			m.pageSelected = index
 		}
 	}
 	return m, nil
 }
 
 func (m model) View() tea.View {
-	var days string
-	// Days of Week
-	days += ColorRed.toStyle().Render("S ")
-	days += ColorValid.toStyle().Render("M T W T F ")
-	days += ColorRed.toStyle().Render("S")
-	days += lipgloss.NewStyle().Render("\n")
-	// Days from the previous months in the week
-	count := 0
+	var cells []string
 	for i := 0; i < int(getFirstDay()); i++ {
-		days += ColorInvalid.toStyle().Render(smallCircle) + " "
-		count++
+		cells = append(cells, m.style.invalidRenderer(ColorInvalid))
 	}
-	// Days of the month
-	for day := 1; day <= getNumOfDays(); day++ {
-		// days += getStyleForDay(day, cursor int, )
-		days += ColorValid.toStyle().Render(smallCircle) + " "
-		count++
-		if count%7 == 0 {
-			days += "\n"
-		}
+	for i := 0; i < int(getNumOfDays()); i++ {
+		cells = append(cells, m.style.cellRenderer(ColorValid))
 	}
-	// Days from the next month in the week
 	for i := 0; i < int(getLastDay()); i++ {
-		days += ColorInvalid.toStyle().Render(smallCircle) + " "
+		cells = append(cells, m.style.invalidRenderer(ColorInvalid))
 	}
-	days += "\n"
 
-	return tea.NewView(days)
+	entryToIndex := func(entry time.Time) int {
+		return int(getFirstDay()) + entry.Day()
+	}
+
+	for _, e := range m.calenderPages[m.pageSelected].entries {
+		color := m.calenderPages[m.pageSelected].color
+		cells[entryToIndex(e)] = m.style.cellRenderer(color)
+	}
+
+	var weeks []string
+	for i := 0; i < len(cells); i += 7 {
+		end := i + 7
+		if end > len(cells) {
+			end = len(cells)
+		}
+		// Join takes variadic args (...string), not a slice so the ... unpacks it into individual args
+		weeks = append(weeks, lipgloss.JoinHorizontal(lipgloss.Top, cells[i:end]...))
+	}
+
+	header := m.style.weekdayRenderer()
+	sep := "\n" + strings.Repeat("\n", m.style.getRowSpacing())
+	weeksBlock := strings.Join(weeks, sep)
+	grid := header + "\n" + weeksBlock
+	return tea.NewView(grid)
 }
 
 func TestCalender() {

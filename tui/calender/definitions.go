@@ -7,7 +7,13 @@ import (
 )
 
 const (
-	smallCircle = "●"
+	largeCircle    = "⬤"
+	largeHexRing   = "⬡"
+	smallCircle    = "●"
+	smallRing      = "◯"
+	selectedCircle = "◉"
+
+	arrow = "➤"
 )
 
 type ThemeColor int
@@ -48,6 +54,7 @@ func (c ThemeColor) toStyle() lipgloss.Style {
 	}
 }
 
+// MOCKS
 var sampleEntries = []time.Time{
 	time.Date(2006, time.September, 1, 9, 30, 0, 0, time.UTC),   // Sep 1, 9:30 AM
 	time.Date(2006, time.September, 5, 14, 15, 0, 0, time.UTC),  // Sep 5, 2:15 PM
