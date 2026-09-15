@@ -11,26 +11,20 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 )
 
-type calenderPage struct {
-	color   ThemeColor
-	entries []time.Time
-}
-
 type model struct {
-	daySelected   int
-	pageSelected  int
+	daySelected   time.Time
+	labelSelected Label
 	style         calenderStyle
-	calenderPages []calenderPage
+	months        Months
 }
 
 // Need to populate the calenderPages from a config file
 func initialModel() model {
 	return model{
-		daySelected:  time.Now().Day() + int(getFirstDay()),
-		pageSelected: 0,
+		daySelected:   time.Now(),
+		labelSelected: Label{name: "First", color: ColorMagenta},
 		// style:        singleCalenderStyle{},
-		style:         doubleCalenderStyle{},
-		calenderPages: mockCalenderPages,
+		style: doubleCalenderStyle{},
 	}
 }
 
@@ -47,21 +41,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q", "shift-c":
 			return m, tea.Quit
 		// Changing Calender Pages
-		case "h", "left":
-			index := (m.pageSelected - 1 + len(m.calenderPages)) % len(m.calenderPages)
-			m.pageSelected = index
-		case "l", "right":
-			index := (m.pageSelected + 1) % len(m.calenderPages)
-			m.pageSelected = index
+		case "p", "left":
+			// update the grid
+		case "n", "right":
+			// update the grid
 		// Movement
-		case "w":
-			m.daySelected = move(m.daySelected, Up, getTotalNumOfDays())
-		case "a":
-			m.daySelected = move(m.daySelected, Left, getTotalNumOfDays())
-		case "s":
-			m.daySelected = move(m.daySelected, Down, getTotalNumOfDays())
-		case "d":
-			m.daySelected = move(m.daySelected, Right, getTotalNumOfDays())
+		case "k":
+		case "h":
+		case "l":
+		case "j":
 		}
 	}
 	return m, nil
