@@ -9,24 +9,17 @@ const (
 	Right
 )
 
-func move(currentIndex int, dir Direction, max int) int {
+func move(c CalenderDate, dir Direction) CalenderDate {
 	switch dir {
 	case Up:
-		if currentIndex > 7 {
-			return currentIndex - 7
-		}
+		return c.addDate(0, 0, -7)
 	case Left:
-		if currentIndex%7 != 0 {
-			return currentIndex - 1
-		}
+		return c.addDate(0, 0, -1)
 	case Right:
-		if currentIndex%7 != 6 {
-			return currentIndex + 1
-		}
+		return c.addDate(0, 0, 1)
 	case Down:
-		if currentIndex < (max - 6) {
-			return currentIndex + 7
-		}
+		return c.addDate(0, 0, 7)
+	default:
+		return c
 	}
-	return currentIndex
 }

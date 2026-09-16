@@ -36,18 +36,13 @@ func mockCalender() Calender {
 		return results
 	}
 
-	type key = struct {
-		Year  Year
-		Month Month
-	}
-
 	loopMonths := func(c CalenderDate,
 		innerF func(c CalenderDate) map[Date][]Entry,
-	) map[key]map[Date][]Entry {
-		out := make(map[key]map[Date][]Entry)
+	) map[MonthKey]map[Date][]Entry {
+		out := make(map[MonthKey]map[Date][]Entry)
 		for i := -1 * r.monthOffset; i < r.monthOffset; i++ {
 			m := c.addDate(0, i, 0)
-			k := key{Year: m.Year, Month: m.Month}
+			k := MonthKey{Year: m.Year, Month: m.Month}
 			out[k] = innerF(m)
 		}
 		return out

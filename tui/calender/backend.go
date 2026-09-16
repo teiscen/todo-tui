@@ -25,6 +25,16 @@ type (
 	}
 )
 
+func (c CalenderDate) weekday() time.Weekday {
+	tDate := calenderDateToTime(c)
+	return tDate.Weekday()
+}
+
+func (c CalenderDate) numDays() int {
+	numDays := int(c.lastDay().Date)
+	return numDays
+}
+
 func (c CalenderDate) lastDay() CalenderDate {
 	y := int(c.Year)
 	m := time.Month(c.Month + 1)
@@ -68,18 +78,21 @@ func calenderDateToTime(c CalenderDate) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, locn)
 }
 
-type Calender struct {
-	Months map[struct {
-		Year  Year
-		Month Month
-	}]map[Date][]Entry
+type MonthKey struct {
+	Year  Year
+	Month Month
 }
 
-func (c Calender) getEntryList(cDate CalenderDate) (entryList []Entry, ok bool) {
-	key := struct {
-		Year  Year
-		Month Month
-	}{
+type Calender struct {
+	Months map[MonthKey]map[Date][]Entry
+}
+
+func (c Calender) getEntryListMonth(mKey MonthKey) map[Date][]Entry {
+	return c.Months[mKey]
+}
+
+func (c Calender) getEntryListDay(cDate CalenderDate) (entryList []Entry, ok bool) {
+	key := MonthKey{
 		Year:  cDate.Year,
 		Month: cDate.Month,
 	}
@@ -88,11 +101,11 @@ func (c Calender) getEntryList(cDate CalenderDate) (entryList []Entry, ok bool) 
 	return
 }
 
-func (c Calender) getEntry(entryList []Entry, label Label) (entry Entry) {
+func (c Calender) getEntry(entryList []Entry, label Label) (entry Entry, ok bool) {
 	for i := range entryList {
 		if entryList[i].Label == label {
-			return entryList[i]
+			return entryList[i], true
 		}
 	}
-	return
+	return Entry{}, false
 }
