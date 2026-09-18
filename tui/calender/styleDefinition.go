@@ -52,6 +52,43 @@ func (c ThemeColor) toStyle() lipgloss.Style {
 	}
 }
 
+type Label int
+
+const (
+	LabelTask Label = iota
+	LabelSleep
+	LabelWorkout
+	LabelReading
+	LabelMisc1
+	LabelMisc2
+)
+
+type LabelInfo struct {
+	name  string
+	color ThemeColor
+}
+
+var labelInfo = map[Label]LabelInfo{
+	LabelTask:    {"Tasks", ColorRed},
+	LabelMisc1:   {"Misc1", ColorGreen},
+	LabelReading: {"Reading", ColorBlue},
+	LabelWorkout: {"Workout", ColorMagenta},
+	LabelSleep:   {"Sleep", ColorTeal},
+	LabelMisc2:   {"Misc2", ColorOrange},
+}
+
+func (l Label) info() LabelInfo {
+	return labelInfo[l]
+}
+
+func (l Label) name() string {
+	return l.info().name
+}
+
+func (l Label) color() ThemeColor {
+	return l.info().color
+}
+
 // CalenderStyling
 type calenderStyle interface {
 	getColumnWidth() int

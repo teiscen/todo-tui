@@ -7,7 +7,6 @@ import (
 
 type randomizerParameter struct {
 	monthOffset     int
-	labelCount      int
 	entryCountRange struct {
 		lower int
 		upper int
@@ -16,7 +15,6 @@ type randomizerParameter struct {
 
 var r = randomizerParameter{
 	monthOffset: 2,
-	labelCount:  5,
 	entryCountRange: struct {
 		lower int
 		upper int
@@ -36,38 +34,33 @@ func mockCalender() Calender {
 		return results
 	}
 
-	loopMonths := func(c CalenderDate,
-		innerF func(c CalenderDate) map[Date][]Entry,
-	) map[MonthKey]map[Date][]Entry {
-		out := make(map[MonthKey]map[Date][]Entry)
-		for i := -1 * r.monthOffset; i < r.monthOffset; i++ {
-			m := c.addDate(0, i, 0)
-			k := MonthKey{Year: m.Year, Month: m.Month}
-			out[k] = innerF(m)
-		}
-		return out
-	}
+	c := timeToCalenderDate(time.Now())
 
-	loopDays := func(c CalenderDate) map[Date][]Entry {
-		out := make(map[Date][]Entry)
-		for label := 0; label < r.labelCount; label++ {
-			upperRange := r.entryCountRange.upper
-			lowerRange := r.entryCountRange.lower
-			count := rand.IntN(upperRange-lowerRange+1) + lowerRange
+	// Loop through all the MONTHS
+	out := make(map[CalenderDate]map[Label]Entry)
+	for x := -1 * r.monthOffset; x < r.monthOffset; x++ {
+		m := c.addDate(0, x, 0)
 
-			numDays := int(c.lastDay().Date)
-			days := randUniqueNums(1, numDays, count)
+		// For each LABEL
+		for y := range labelInfo {
+
+			// generate which Days of entries
+			numEntries := rand.IntN(r.entryCountRange.upper-r.entryCountRange.lower+1) + r.entryCountRange.lower
+			days := randUniqueNums(1, m.numDays(), numEntries)
+
+			// For each of those DAYS
 			for _, d := range days {
-				out[Date(d)] = append(out[Date(d)], Entry{
-					Label:  Label(label),
+				cDate := CalenderDate{Year: m.Year, Month: m.Month, Date: Date(d)}
+				if out[cDate] == nil {
+					out[cDate] = make(map[Label]Entry)
+				}
+				out[cDate][y] = Entry{
 					Status: 1,
 					Msg:    "mock entry",
-				})
+				}
 			}
 		}
-		return out
 	}
 
-	cDate := timeToCalenderDate(time.Now())
-	return Calender{Months: loopMonths(cDate, loopDays)}
+	return Calender{out}
 }

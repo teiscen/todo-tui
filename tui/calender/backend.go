@@ -5,10 +5,8 @@ import (
 )
 
 type (
-	Label  int
 	Status int
 	Entry  struct {
-		Label  Label
 		Status Status
 		Msg    string
 	}
@@ -78,34 +76,11 @@ func calenderDateToTime(c CalenderDate) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, locn)
 }
 
-type MonthKey struct {
-	Year  Year
-	Month Month
-}
-
 type Calender struct {
-	Months map[MonthKey]map[Date][]Entry
+	Months map[CalenderDate]map[Label]Entry
 }
 
-func (c Calender) getEntryListMonth(mKey MonthKey) map[Date][]Entry {
-	return c.Months[mKey]
-}
-
-func (c Calender) getEntryListDay(cDate CalenderDate) (entryList []Entry, ok bool) {
-	key := MonthKey{
-		Year:  cDate.Year,
-		Month: cDate.Month,
-	}
-
-	entryList, ok = c.Months[key][cDate.Date]
+func (c Calender) getEntry(d CalenderDate, l Label) (val Entry, ok bool) {
+	val, ok = c.Months[d][l]
 	return
-}
-
-func (c Calender) getEntry(entryList []Entry, label Label) (entry Entry, ok bool) {
-	for i := range entryList {
-		if entryList[i].Label == label {
-			return entryList[i], true
-		}
-	}
-	return Entry{}, false
 }

@@ -10,18 +10,23 @@ import (
 
 type model struct {
 	cursor   CalenderDate
+	page     Label
 	style    calenderStyle
 	calender Calender
+	grid     RenderGrid
 }
 
 // Need to populate the calenderPages from a config file
 func initialModel() model {
-	return model{
+	m := model{
 		cursor:   timeToCalenderDate(time.Now()),
+		page:     0,
 		style:    doubleCalenderStyle{},
 		calender: mockCalender(),
-		// renderCache: nil{},
 	}
+	rg := m.CreateGrid()
+	m.grid = m.UpdateSelected(m.calender, m.cursor, rg, m.page)
+	return m
 }
 
 func (m model) Init() tea.Cmd {
@@ -52,9 +57,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
-	var out string
+	var color ThemeColor
+	if _, ok := m.calender.Months[m.cursor][m.page]; ok {
+		color = m.page.info().color
+	} else {
+		color = ColorValid
+	}
 
-	return tea.NewView(out)
+	complete := genBorder(
+		m.Render(), ColorValid,
+		calenderDateToTime(m.cursor).Format("January 02"), color, true,
+		m.page.info().name, m.page.info().color, true,
+	)
+
+	return tea.NewView(complete)
 }
 
 func TestCalender() {
