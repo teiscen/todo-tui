@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
+	"todo-tui/calendar"
 	"todo-tui/jsonmanager"
-	"todo-tui/tui/calender"
 )
 
 func testJSON() {
@@ -31,5 +31,5 @@ func testJSON() {
 func main() {
 	// testJSON()
 	// tui.TestTUI()
-	calender.TestCalender()
+	calendar.TestCalendar()
 }

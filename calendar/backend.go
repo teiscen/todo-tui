@@ -1,4 +1,4 @@
-package calender
+package calendar
 
 import (
 	"time"
@@ -16,59 +16,59 @@ type (
 	Year         int
 	Month        int
 	Date         int
-	CalenderDate struct {
+	CalendarDate struct {
 		Year  Year
 		Month Month
 		Date  Date
 	}
 )
 
-func (c CalenderDate) weekday() time.Weekday {
-	tDate := calenderDateToTime(c)
+func (c CalendarDate) weekday() time.Weekday {
+	tDate := calendarDateToTime(c)
 	return tDate.Weekday()
 }
 
-func (c CalenderDate) numDays() int {
+func (c CalendarDate) numDays() int {
 	numDays := int(c.lastDay().Date)
 	return numDays
 }
 
-func (c CalenderDate) lastDay() CalenderDate {
+func (c CalendarDate) lastDay() CalendarDate {
 	y := int(c.Year)
 	m := time.Month(c.Month + 1)
 	d := 0
 	locn := time.Now().Location()
 	inTime := time.Date(y, m, d, 0, 0, 0, 0, locn)
-	return timeToCalenderDate(inTime)
+	return timeToCalendarDate(inTime)
 }
 
-func (c CalenderDate) firstDay() CalenderDate {
+func (c CalendarDate) firstDay() CalendarDate {
 	y := int(c.Year)
 	m := time.Month(c.Month)
 	d := 1
 	locn := time.Now().Location()
 	inTime := time.Date(y, m, d, 0, 0, 0, 0, locn)
-	return timeToCalenderDate(inTime)
+	return timeToCalendarDate(inTime)
 }
 
-func (c CalenderDate) addDate(y int, m int, d int) CalenderDate {
-	t := calenderDateToTime(c)
-	t.AddDate(y, m, d)
-	return timeToCalenderDate(t)
+func (c CalendarDate) addDate(y int, m int, d int) CalendarDate {
+	t := calendarDateToTime(c)
+	t = t.AddDate(y, m, d)
+	return timeToCalendarDate(t)
 }
 
-func timeToCalenderDate(t time.Time) CalenderDate {
+func timeToCalendarDate(t time.Time) CalendarDate {
 	y, mTemp, d := t.Date()
 	m := int(mTemp)
 
-	return CalenderDate{
+	return CalendarDate{
 		Year:  Year(y),
 		Month: Month(m),
 		Date:  Date(d),
 	}
 }
 
-func calenderDateToTime(c CalenderDate) time.Time {
+func calendarDateToTime(c CalendarDate) time.Time {
 	y := int(c.Year)
 	m := time.Month(c.Month)
 	d := int(c.Date)
@@ -76,11 +76,11 @@ func calenderDateToTime(c CalenderDate) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, locn)
 }
 
-type Calender struct {
-	Months map[CalenderDate]map[Label]Entry
+type Calendar struct {
+	Months map[CalendarDate]map[Label]Entry
 }
 
-func (c Calender) getEntry(d CalenderDate, l Label) (val Entry, ok bool) {
+func (c Calendar) getEntry(d CalendarDate, l Label) (val Entry, ok bool) {
 	val, ok = c.Months[d][l]
 	return
 }
