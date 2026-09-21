@@ -56,33 +56,24 @@ func (m Model) cursorColor() Color {
 func CreateGrid(m Model) RenderInfo {
 	var out []Cell
 
-	// Find the first day
 	d := m.selDate.firstDay()
 	firstOffset := int(d.weekday())
 	startDate := d.addDate(0, 0, -1*firstOffset)
 
-	d = m.selDate.lastDay()
-	trailOffset := 6 - int(d.weekday())
-
-	totalCount := firstOffset + m.selDate.numDays() + trailOffset
+	const totalCount = 42 // always 6 full weeks — keeps grid height constant every month
+	trailOffset := totalCount - firstOffset - m.selDate.numDays()
+	_ = trailOffset // no longer needed separately, kept for clarity if you want it elsewhere
 
 	for i := 0; i < totalCount; i++ {
 		cDate := startDate.addDate(0, 0, i)
-		inBounds := true
-		if i < firstOffset || i >= firstOffset+m.selDate.numDays() {
-			inBounds = false
-		}
-		out = append(out, Cell{
-			cDate,
-			inBounds,
-			m.calendar.Months[cDate],
-		})
+		inBounds := i >= firstOffset && i < firstOffset+m.selDate.numDays()
+		out = append(out, Cell{cDate, inBounds, m.calendar.Months[cDate]})
 	}
 
 	return RenderInfo{m.selDate.firstDay(), out}
 }
 
-func (m Model) Render() string {
+func (m Model) RenderCalendar() string {
 	cells := make([]string, len(m.rInfo.grid))
 
 	for i, c := range m.rInfo.grid {

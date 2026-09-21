@@ -2,7 +2,12 @@ package calendar
 
 import lipgloss "charm.land/lipgloss/v2"
 
-func genBorder(
+//      Thick
+// ┏━━━━━━━━━━━━━━┓
+// ┃  Bubble Tea  ┃
+// ┗━━━━━━━━━━━━━━┛
+
+func genBorderCalendar(
 	mainBody string, borderColor Color,
 	header string, headerColor Color,
 	footer string, footerColor Color,
@@ -35,8 +40,8 @@ func genBorder(
 	footerStyled := footerColor.toStyle().Bold(footerIsBold).Render(paddedFooter)
 	leftPadding, rightPadding = padding(paddedFooter)
 
-	botBorderLeft := "╰" + leftPadding
-	botBorderRight := rightPadding + "╯"
+	botBorderLeft := "├" + leftPadding
+	botBorderRight := rightPadding + "┤"
 
 	topBorder := topBorderLeft + headerStyled + topBorderRight
 	botBorder := botBorderLeft + footerStyled + botBorderRight
@@ -45,5 +50,21 @@ func genBorder(
 		Border(lipgloss.NormalBorder(), false, true, false, true).
 		Render(mainBody)
 
-	return lipgloss.JoinVertical(lipgloss.Left, topBorder, sideBorder, botBorder)
+	str := lipgloss.JoinVertical(lipgloss.Left, topBorder, sideBorder, botBorder)
+	return lipgloss.NewStyle().Padding(0, 1).Render(str)
+}
+
+func genBorderNotes(note string, borderColor Color) string {
+	return borderColor.toStyle().
+		Border(lipgloss.RoundedBorder(), false, true, true, true).
+		Padding(0, 1).
+		Render(note)
+}
+
+func genBorder(cal string, note string, borderColor Color) string {
+	combined := lipgloss.JoinVertical(lipgloss.Center, cal, note)
+	return borderColor.toStyle().
+		Border(lipgloss.RoundedBorder()).
+		// Padding(1, 2).
+		Render(combined)
 }

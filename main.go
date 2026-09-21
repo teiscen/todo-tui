@@ -6,6 +6,7 @@ import (
 
 	"todo-tui/calendar"
 	"todo-tui/jsonmanager"
+	"todo-tui/testing"
 )
 
 func testJSON() {
@@ -28,8 +29,14 @@ func testJSON() {
 	}
 }
 
+type AppModel struct {
+	calender calendar.Model
+	notes    testing.Model
+}
+
 func main() {
 	// testJSON()
 	// tui.TestTUI()
+	// testing.TestNotes()
 	calendar.TestCalendar()
 }
