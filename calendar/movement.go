@@ -37,3 +37,7 @@ func (m *Model) movePage(dir Direction) {
 		}
 	}
 }
+
+// TODO: Shift focus logic to movement
+func (m *Model) moveFocus(dir Direction) {
+}
