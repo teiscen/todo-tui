@@ -72,7 +72,7 @@ func genBorderNotes(note string) string {
 		Render(note)
 }
 
-func (Planner) Render(cal string, note string) string {
+func (Planner) RenderStr(cal string, note string) string {
 	cal = genBorderCalendar(cal)
 	note = genBorderNotes(note)
 	combined := lipgloss.JoinVertical(lipgloss.Center, cal, note)

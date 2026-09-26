@@ -15,6 +15,13 @@ type Calendar struct {
 	calstyle CalendarStyle
 }
 
+func NewCalendar(s backend.State) Calendar {
+	return Calendar{
+		s.GetCalendarRenderInfo(),
+		doubleStyle,
+	}
+}
+
 func (c Calendar) Render() string {
 	header := c.calstyle.weekdayRenderer()
 
