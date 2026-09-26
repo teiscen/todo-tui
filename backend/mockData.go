@@ -1,4 +1,4 @@
-package calendar
+package backend
 
 import (
 	"math/rand/v2"
@@ -24,43 +24,44 @@ var r = MockRange{
 	},
 }
 
-func mockCalendar(labelInfo map[Label]LabelInfo) Calendar {
-	randUniqueNums := func(min, max, count int) []int {
-		available := make([]int, max-min+1)
+func randUniqueNums(min int, max int, count int) []int {
+	available := make([]int, max-min+1)
 
-		for i := range available {
-			available[i] = min + i
-		}
-
-		rand.Shuffle(len(available), func(i, j int) {
-			available[i], available[j] = available[j], available[i]
-		})
-
-		return available[:count]
+	for i := range available {
+		available[i] = min + i
 	}
 
-	now := timeToCalendarDate(time.Now())
-	entries := make(map[CalendarDate]map[Label]Entry)
+	rand.Shuffle(len(available), func(i, j int) {
+		available[i], available[j] = available[j], available[i]
+	})
+
+	return available[:count]
+}
+
+func MockCalendar() Calendar {
+	now := TimeToDate(time.Now())
+	entries := make(map[Date]map[LabelID]Entry)
 
 	for monthOffset := -r.monthOffset; monthOffset <= r.monthOffset; monthOffset++ {
-		month := now.addDate(0, monthOffset, 0)
+		month := now.AddDate(0, monthOffset, 0)
 
-		for label := range labelInfo {
+		labels, _ := MockConfig()
+		for label := range labels {
 			numEntries := rand.IntN(
 				r.entryCountRange.upper-r.entryCountRange.lower+1,
 			) + r.entryCountRange.lower
 
-			days := randUniqueNums(1, month.numDays(), numEntries)
+			days := randUniqueNums(1, month.NumDays(), numEntries)
 
 			for _, day := range days {
-				date := CalendarDate{
+				date := Date{
 					Year:  month.Year,
 					Month: month.Month,
-					Date:  Date(day),
+					Date:  Day(day),
 				}
 
 				if entries[date] == nil {
-					entries[date] = make(map[Label]Entry)
+					entries[date] = make(map[LabelID]Entry)
 				}
 
 				entries[date][label] = Entry{

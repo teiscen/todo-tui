@@ -1,6 +1,8 @@
 package calendar
 
 import (
+	"todo-tui/backend"
+
 	lipgloss "charm.land/lipgloss/v2"
 )
 
@@ -45,11 +47,14 @@ var doubleStyle = CalendarStyle{
 
 	cellChar:     largeCircle,
 	invalidChar:  largeHexRing,
-	selectedChar: "[" + largeCircle + " ]",
+	selectedChar: largeCircle,
 }
 
-func (s CalendarStyle) weekdayRenderer(valid Color, weekend Color) string {
+func (s CalendarStyle) weekdayRenderer() string {
 	var out string
+
+	valid := backend.HexCode("#C0C0C0")
+	weekend := backend.HexCode("#C77373")
 
 	for i, day := range s.weekdays {
 		color := valid
@@ -58,32 +63,32 @@ func (s CalendarStyle) weekdayRenderer(valid Color, weekend Color) string {
 			color = weekend
 		}
 
-		out += color.toStyle().
+		out += color.ToStyle().
 			Width(s.columnWidth).
 			Align(lipgloss.Center).
 			Bold(s.weekdayBold).
 			Render(day)
 	}
 
-	return "\n" + out + "\n"
+	return out + "\n"
 }
 
-func (s CalendarStyle) invalidRenderer(c Color) string {
-	return c.toStyle().
+func (s CalendarStyle) invalidRenderer(c backend.HexCode) string {
+	return c.ToStyle().
 		Width(s.columnWidth).
 		Align(lipgloss.Center).
 		Render(s.invalidChar)
 }
 
-func (s CalendarStyle) cellRenderer(c Color) string {
-	return c.toStyle().
+func (s CalendarStyle) validRenderer(c backend.HexCode) string {
+	return c.ToStyle().
 		Width(s.columnWidth).
 		Align(lipgloss.Center).
 		Render(s.cellChar)
 }
 
-func (s CalendarStyle) selectedRenderer(c Color) string {
-	return c.toStyle().
+func (s CalendarStyle) selectedRenderer(c backend.HexCode) string {
+	return c.ToStyle().
 		Width(s.columnWidth).
 		Align(lipgloss.Center).
 		Bold(true).

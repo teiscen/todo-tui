@@ -1,6 +1,10 @@
 package calendar
 
-import lipgloss "charm.land/lipgloss/v2"
+import (
+	"todo-tui/backend"
+
+	lipgloss "charm.land/lipgloss/v2"
+)
 
 //      Thick
 // ┏━━━━━━━━━━━━━━┓
@@ -8,10 +12,16 @@ import lipgloss "charm.land/lipgloss/v2"
 // ┗━━━━━━━━━━━━━━┛
 
 func genBorderCalendar(
-	mainBody string, borderColor Color,
-	header string, headerColor Color,
-	footer string, footerColor Color,
+	mainBody string, // borderColor Color,
+	// header string, headerColor Color,
+	// footer string, footerColor Color,
 ) string {
+	header := "HEADER"
+	footer := "FOOTER"
+	borderColor := backend.HexCode("#C0C0C0")
+	headerColor := backend.HexCode("#C0C0C0")
+	footerColor := backend.HexCode("#C0C0C0")
+
 	headerIsBold := true
 	footerIsBold := true
 
@@ -31,13 +41,13 @@ func genBorderCalendar(
 	paddedHeader := " " + header + " "
 	paddedFooter := " " + footer + " "
 
-	headerStyled := headerColor.toStyle().Bold(headerIsBold).Render(paddedHeader)
+	headerStyled := headerColor.ToStyle().Bold(headerIsBold).Render(paddedHeader)
 	leftPadding, rightPadding := padding(paddedHeader)
 
 	topBorderLeft := "╭" + leftPadding
 	topBorderRight := rightPadding + "╮"
 
-	footerStyled := footerColor.toStyle().Bold(footerIsBold).Render(paddedFooter)
+	footerStyled := footerColor.ToStyle().Bold(footerIsBold).Render(paddedFooter)
 	leftPadding, rightPadding = padding(paddedFooter)
 
 	botBorderLeft := "├" + leftPadding
@@ -46,7 +56,7 @@ func genBorderCalendar(
 	topBorder := topBorderLeft + headerStyled + topBorderRight
 	botBorder := botBorderLeft + footerStyled + botBorderRight
 
-	sideBorder := borderColor.toStyle().
+	sideBorder := borderColor.ToStyle().
 		Border(lipgloss.NormalBorder(), false, true, false, true).
 		Render(mainBody)
 
@@ -54,16 +64,20 @@ func genBorderCalendar(
 	return lipgloss.NewStyle().Padding(0, 1).Render(str)
 }
 
-func genBorderNotes(note string, borderColor Color) string {
-	return borderColor.toStyle().
+func genBorderNotes(note string) string {
+	borderColor := backend.HexCode("#C0C0C0")
+	return borderColor.ToStyle().
 		Border(lipgloss.RoundedBorder(), false, true, true, true).
 		Padding(0, 1).
 		Render(note)
 }
 
-func genBorder(cal string, note string, borderColor Color) string {
+func (Planner) Render(cal string, note string) string {
+	cal = genBorderCalendar(cal)
+	note = genBorderNotes(note)
 	combined := lipgloss.JoinVertical(lipgloss.Center, cal, note)
-	return borderColor.toStyle().
+	borderColor := backend.HexCode("#C0C0C0")
+	return borderColor.ToStyle().
 		Border(lipgloss.RoundedBorder()).
 		// Padding(1, 2).
 		Render(combined)
