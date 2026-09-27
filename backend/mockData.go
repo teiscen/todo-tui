@@ -46,7 +46,8 @@ func MockCalendar() Calendar {
 		month := now.AddDate(0, monthOffset, 0)
 
 		labels, _ := MockConfig()
-		for label := range labels {
+
+		for _, label := range labels.Order {
 			numEntries := rand.IntN(
 				r.entryCountRange.upper-r.entryCountRange.lower+1,
 			) + r.entryCountRange.lower
@@ -71,6 +72,5 @@ func MockCalendar() Calendar {
 			}
 		}
 	}
-
 	return Calendar{Months: entries}
 }

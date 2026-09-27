@@ -22,13 +22,19 @@ func defaultConfig() Config {
 		},
 
 		Labels: Labels{
-			LabelID("task"): LabelInfo{
-				Name:    "Tasks",
-				ColorID: ColorID("red"),
+			Info: map[LabelID]LabelInfo{
+				"task": {
+					Name:    "Tasks",
+					ColorID: ColorID("red"),
+				},
+				"university": {
+					Name:    "University",
+					ColorID: ColorID("blue"),
+				},
 			},
-			"university": LabelInfo{
-				Name:    "University",
-				ColorID: ColorID("blue"),
+			Order: []LabelID{
+				"task",
+				"university",
 			},
 		},
 	}

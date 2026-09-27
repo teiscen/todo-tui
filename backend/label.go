@@ -6,7 +6,10 @@ type (
 		Name    string
 		ColorID ColorID
 	}
-	Labels map[LabelID]LabelInfo
+	Labels struct {
+		Info  map[LabelID]LabelInfo
+		Order []LabelID
+	}
 )
 
 // func (m *Model) addLabel(label Label) {

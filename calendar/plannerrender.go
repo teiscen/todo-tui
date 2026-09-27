@@ -11,16 +11,12 @@ import (
 // ┃  Bubble Tea  ┃
 // ┗━━━━━━━━━━━━━━┛
 
-func genBorderCalendar(
-	mainBody string, // borderColor Color,
-	// header string, headerColor Color,
-	// footer string, footerColor Color,
+func (p Planner) genBorderCalendar(
+	mainBody string,
 ) string {
-	header := "HEADER"
-	footer := "FOOTER"
-	borderColor := backend.HexCode("#C0C0C0")
-	headerColor := backend.HexCode("#C0C0C0")
-	footerColor := backend.HexCode("#C0C0C0")
+	header := p.pRI.Header
+	footer := p.pRI.Footer
+	borderColor := p.pRI.BorderColor
 
 	headerIsBold := true
 	footerIsBold := true
@@ -38,16 +34,16 @@ func genBorderCalendar(
 		return left, right
 	}
 
-	paddedHeader := " " + header + " "
-	paddedFooter := " " + footer + " "
+	paddedHeader := " " + header.Str + " "
+	paddedFooter := " " + footer.Str + " "
 
-	headerStyled := headerColor.ToStyle().Bold(headerIsBold).Render(paddedHeader)
+	headerStyled := header.Hex.ToStyle().Bold(headerIsBold).Render(paddedHeader)
 	leftPadding, rightPadding := padding(paddedHeader)
 
 	topBorderLeft := "╭" + leftPadding
 	topBorderRight := rightPadding + "╮"
 
-	footerStyled := footerColor.ToStyle().Bold(footerIsBold).Render(paddedFooter)
+	footerStyled := footer.Hex.ToStyle().Bold(footerIsBold).Render(paddedFooter)
 	leftPadding, rightPadding = padding(paddedFooter)
 
 	botBorderLeft := "├" + leftPadding
@@ -64,17 +60,17 @@ func genBorderCalendar(
 	return lipgloss.NewStyle().Padding(0, 1).Render(str)
 }
 
-func genBorderNotes(note string) string {
-	borderColor := backend.HexCode("#C0C0C0")
+func (p Planner) genBorderNotes(note string) string {
+	borderColor := p.pRI.BorderColor
 	return borderColor.ToStyle().
 		Border(lipgloss.RoundedBorder(), false, true, true, true).
 		Padding(0, 1).
 		Render(note)
 }
 
-func (Planner) RenderStr(cal string, note string) string {
-	cal = genBorderCalendar(cal)
-	note = genBorderNotes(note)
+func (p Planner) RenderBorder(cal string, note string) string {
+	cal = p.genBorderCalendar(cal)
+	note = p.genBorderNotes(note)
 	combined := lipgloss.JoinVertical(lipgloss.Center, cal, note)
 	borderColor := backend.HexCode("#C0C0C0")
 	return borderColor.ToStyle().

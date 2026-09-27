@@ -22,6 +22,11 @@ func NewCalendar(s backend.State) Calendar {
 	}
 }
 
+// func (c *Calendar) Update(cri backend.CalendarRenderInfo) {
+func (c *Calendar) Update(s backend.State) {
+	c.cri = s.GetCalendarRenderInfo()
+}
+
 func (c Calendar) Render() string {
 	header := c.calstyle.weekdayRenderer()
 

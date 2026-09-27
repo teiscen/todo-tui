@@ -13,7 +13,8 @@ var (
 )
 
 type Note struct {
-	ta textarea.Model
+	Ta  textarea.Model
+	nRI backend.NoteRenderInfo
 }
 
 func NewNote(s backend.State) Note {
@@ -22,7 +23,6 @@ func NewNote(s backend.State) Note {
 	ti.Prompt = ""
 	ti.SetWidth(MaxWidth)
 	ti.SetHeight(MaxHeight)
-
 	ti.KeyMap = textarea.DefaultKeyMap()
 
 	styles := textarea.DefaultDarkStyles()
@@ -30,10 +30,34 @@ func NewNote(s backend.State) Note {
 
 	ti.SetStyles(styles)
 
-	ti.SetValue("DEFAULT VALUE .................................................")
-	return Note{ti}
+	nri := s.GetNoteRenderInfo()
+	ti.SetValue(nri.Msg)
+	return Note{
+		ti,
+		nri,
+	}
+}
+
+func (n *Note) SetEntry() {
+	n.Ta.SetValue(n.nRI.Msg)
+}
+
+// func (n *Note) Update(nRI backend.NoteRenderInfo) {
+func (n *Note) Update(s backend.State) {
+	n.nRI = s.GetNoteRenderInfo()
+
+	if n.nRI.IsFocused {
+		n.Ta.Focus()
+	} else {
+		n.Ta.Blur()
+	}
 }
 
 func (n Note) Render() string {
-	return "\n" + n.ta.View()
+	if n.nRI.IsFocused {
+		n.Ta.Focus()
+	} else {
+		n.Ta.Blur()
+	}
+	return "\n" + n.Ta.View()
 }

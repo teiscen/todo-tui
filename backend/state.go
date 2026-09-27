@@ -8,10 +8,40 @@ type State struct {
 	SelectedLabel LabelID
 	Labels        Labels
 	Colors        Colors
+	NoteFocused   bool
 }
 
 func (s State) getLabel() LabelInfo {
-	return s.Labels[s.SelectedLabel]
+	return s.Labels.Info[s.SelectedLabel]
+}
+
+func (s State) PrevLabel() LabelID {
+	for i, id := range s.Labels.Order {
+		if id == s.SelectedLabel {
+			return s.Labels.Order[(i-1+len(s.Labels.Order))%len(s.Labels.Order)]
+		}
+	}
+
+	return s.SelectedLabel
+}
+
+func (s State) NextLabel() LabelID {
+	for i, id := range s.Labels.Order {
+		if id == s.SelectedLabel {
+			return s.Labels.Order[(i+1)%len(s.Labels.Order)]
+		}
+	}
+
+	return s.SelectedLabel
+}
+
+func (s State) getSelectedDateColor() HexCode {
+	_, ok := s.Calendar.getEntry(s.SelectedDate, s.SelectedLabel)
+	color := s.Colors["valid"]
+	if ok {
+		color = s.Colors[s.getLabel().ColorID]
+	}
+	return color
 }
 
 func (s State) getColor(cID ColorID) (HexCode, bool) {
@@ -21,12 +51,8 @@ func (s State) getColor(cID ColorID) (HexCode, bool) {
 
 func MockState() State {
 	labels, colors := MockConfig()
-	// get an arbitrary LabelID to start
-	var selectedLabel LabelID
-	for k := range labels {
-		selectedLabel = k
-		break
-	}
+
+	selectedLabel := labels.Order[0]
 
 	return State{
 		Calendar:      MockCalendar(),
@@ -34,6 +60,7 @@ func MockState() State {
 		SelectedLabel: selectedLabel,
 		Labels:        labels,
 		Colors:        colors,
+		NoteFocused:   false,
 	}
 }
 
@@ -56,26 +83,23 @@ func (s State) getGrid() (grid Grid) {
 	cInvalid, _ := s.getColor("invalid")
 	cLabel, _ := s.getColor(s.getLabel().ColorID)
 
+	firstDateIdx := int(s.SelectedDate.FirstDay().Weekday())
+	lastDateIdx := firstDateIdx + s.SelectedDate.NumDays()
+
 	isValid := func(row, col int) bool {
 		idx := row*7 + col
-		firstDateIdx := int(s.SelectedDate.FirstDay().Weekday())
-		lastDateIdx := firstDateIdx + s.SelectedDate.NumDays()
-
-		if firstDateIdx < idx && idx < lastDateIdx {
-			return true
-		} else {
-			return false
-		}
+		return firstDateIdx <= idx && idx < lastDateIdx
 	}
 
-	date := s.SelectedDate.FirstDay()
+	date := s.SelectedDate.FirstDay().AddDate(0, 0, -firstDateIdx)
+
 	for row := range grid {
 		for col := range grid[row] {
 			valid := isValid(row, col)
 
-			// Determine Color and Status
 			var color HexCode
 			var status Status
+
 			val, ok := s.Calendar.getEntry(date, s.SelectedLabel)
 			if ok {
 				color = cLabel
@@ -89,10 +113,7 @@ func (s State) getGrid() (grid Grid) {
 				status = NoEntry
 			}
 
-			hovered := false
-			if date == s.SelectedDate {
-				hovered = true
-			}
+			hovered := date == s.SelectedDate
 
 			grid[row][col] = GridCell{
 				color,
@@ -123,10 +144,43 @@ func (s State) GetCalendarRenderInfo() CalendarRenderInfo {
 	}
 }
 
-type NoteRenderInfo struct{}
+type NoteRenderInfo struct {
+	IsFocused bool
+	Msg       string
+}
 
 func (s State) GetNoteRenderInfo() NoteRenderInfo {
-	return NoteRenderInfo{}
+	e, ok := s.Calendar.getEntry(s.SelectedDate, s.SelectedLabel)
+	var str string
+	if !ok {
+		str = "No Entry Found"
+	} else {
+		str = e.Msg
+	}
+	return NoteRenderInfo{
+		s.NoteFocused,
+		str,
+	}
+}
+
+type PlannerRenderInfo struct {
+	Header      ColoredString
+	Footer      ColoredString
+	BorderColor HexCode
+}
+
+func (s State) GetPlannerRenderInfo() PlannerRenderInfo {
+	return PlannerRenderInfo{
+		ColoredString{
+			s.SelectedDate.Format(),
+			s.getSelectedDateColor(),
+		},
+		ColoredString{
+			s.getLabel().Name,
+			s.Colors[s.getLabel().ColorID],
+		},
+		s.Colors["valid"],
+	}
 }
 
 func WriteState(filePath string) error {

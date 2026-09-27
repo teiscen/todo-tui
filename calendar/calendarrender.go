@@ -47,7 +47,7 @@ var doubleStyle = CalendarStyle{
 
 	cellChar:     largeCircle,
 	invalidChar:  largeHexRing,
-	selectedChar: largeCircle,
+	selectedChar: "|" + largeCircle + " |",
 }
 
 func (s CalendarStyle) weekdayRenderer() string {
@@ -77,6 +77,7 @@ func (s CalendarStyle) invalidRenderer(c backend.HexCode) string {
 	return c.ToStyle().
 		Width(s.columnWidth).
 		Align(lipgloss.Center).
+		Bold(true).
 		Render(s.invalidChar)
 }
 
@@ -84,6 +85,7 @@ func (s CalendarStyle) validRenderer(c backend.HexCode) string {
 	return c.ToStyle().
 		Width(s.columnWidth).
 		Align(lipgloss.Center).
+		Bold(true).
 		Render(s.cellChar)
 }
 
@@ -91,6 +93,6 @@ func (s CalendarStyle) selectedRenderer(c backend.HexCode) string {
 	return c.ToStyle().
 		Width(s.columnWidth).
 		Align(lipgloss.Center).
-		Bold(true).
+		Italic(true).
 		Render(s.selectedChar)
 }

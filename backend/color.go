@@ -8,8 +8,8 @@ type (
 	Colors  map[ColorID]HexCode
 
 	ColoredString struct {
-		str   string
-		cInfo HexCode
+		Str string
+		Hex HexCode
 	}
 )
 
