@@ -2,65 +2,65 @@ package calendar
 
 import (
 	"strings"
+	"time"
 
-	"todo-tui/backend"
+	backend "todo-tui/backend_old"
 
-	lipgloss "charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2"
 )
 
-// TODO: need to restructure some of the render logic
-// to make better use of custom themes/color
+type Grid struct {
+	Date     backend.Date
+	IsValid  bool
+	IsMarked bool
+}
+
 type Calendar struct {
-	cri      backend.CalendarRenderInfo
-	calstyle CalendarStyle
+	SelectedDate backend.Date
+	Style        CalendarStyle
+	Grid         [6][7]Grid
 }
 
-func NewCalendar(s backend.State) Calendar {
+func NewCalendar() Calendar {
 	return Calendar{
-		s.GetCalendarRenderInfo(),
-		doubleStyle,
+		SelectedDate: backend.TimeToDate(time.Now()),
+		Style:        GetDefaultStyle(),
 	}
-}
-
-// func (c *Calendar) Update(cri backend.CalendarRenderInfo) {
-func (c *Calendar) Update(s backend.State) {
-	c.cri = s.GetCalendarRenderInfo()
 }
 
 func (c Calendar) Render() string {
-	header := c.calstyle.weekdayRenderer()
+	var out string
 
-	var cells []string
-	for row := range c.cri.Grid {
-		for col := range c.cri.Grid[row] {
-			cell := c.cri.Grid[row][col]
-			color := cell.Color
+	out = c.Style.RenderHeader() + strings.Repeat("\n", c.Style.RowSpacing+1)
 
-			var str string
-			if cell.IsValid {
-				str = c.calstyle.validRenderer(color)
+	for row := range c.Grid {
+		for col := range c.Grid[row] {
+			cell := c.Grid[row][col]
+
+			var style lipgloss.Style
+			if cell.IsMarked {
+				style = c.Style.AccentStyle(cell.IsValid)
+			} else if col == 0 || col == 6 {
+				style = c.Style.WeekendStyle(cell.IsValid)
 			} else {
-				str = c.calstyle.invalidRenderer(color)
+				style = c.Style.WeekdayStyle(cell.IsValid)
 			}
-			if cell.Selected {
-				str = c.calstyle.selectedRenderer(color)
+
+			var icon string
+			if cell.Date == c.SelectedDate {
+				icon = c.Style.CharSelected
+			} else {
+				icon = c.Style.CharIcon
 			}
-			cells = append(cells, str)
+
+			out += style.Render(icon)
 		}
+		// Need the default 1, so added +1 spacing
+		out += strings.Repeat("\n", c.Style.RowSpacing+1)
 	}
 
-	var weeks []string
-	for i := 0; i < len(cells); i += 7 {
-		end := i + 7
-		if end > len(cells) {
-			end = len(cells)
-		}
-		weeks = append(weeks, lipgloss.JoinHorizontal(lipgloss.Top, cells[i:end]...))
-	}
+	return lipgloss.NewStyle().Padding(1, 1).Render(out)
+}
 
-	sep := "\n" + strings.Repeat("\n", c.calstyle.rowSpacing)
-	weeksBlock := strings.Join(weeks, sep)
-
-	str := header + "\n" + weeksBlock
-	return lipgloss.NewStyle().Padding(1, 1).Render(str)
+func Update() {
 }
