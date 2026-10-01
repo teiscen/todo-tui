@@ -1,7 +1,7 @@
 package main
 
 import (
-	"todo-tui/calendar"
+	"todo-tui/notes"
 )
 
 // func TestRendering() {
@@ -25,5 +25,8 @@ func main() {
 	// TestRendering()
 
 	// calendar.CalendarTestPrint()
-	calendar.CalendarTestUpdate()
+	// calendar.CalendarTestUpdate()
+
+	notes.NotesTestPrint()
+	// notes.NotesTestToggle()
 }
