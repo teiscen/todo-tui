@@ -23,5 +23,7 @@ func main() {
 	// tui.TestTUI()
 	// testing.TestingMain()
 	// TestRendering()
-	calendar.CalendarTestPrint()
+
+	// calendar.CalendarTestPrint()
+	calendar.CalendarTestUpdate()
 }

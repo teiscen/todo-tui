@@ -6,6 +6,7 @@ import (
 
 	backend "todo-tui/backend_old"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -62,5 +63,19 @@ func (c Calendar) Render() string {
 	return lipgloss.NewStyle().Padding(1, 1).Render(out)
 }
 
-func Update() {
+// hjkl - movements
+// x 	- mark/unmark
+func (c *Calendar) Update(msg tea.KeyPressMsg) {
+	switch msg.String() {
+	case "h":
+		c.Movement(Left)
+	case "j":
+		c.Movement(Down)
+	case "k":
+		c.Movement(Up)
+	case "l":
+		c.Movement(Right)
+	case "x":
+		c.ToggleMark()
+	}
 }
