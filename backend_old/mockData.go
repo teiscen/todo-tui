@@ -38,14 +38,16 @@ func randUniqueNums(min int, max int, count int) []int {
 	return available[:count]
 }
 
+// Changes mock Calendar to return labels alongside Calendar
 func MockCalendar() Calendar {
 	now := TimeToDate(time.Now())
 	entries := make(map[Date]map[LabelID]Entry)
 
+	var labels Labels
 	for monthOffset := -r.monthOffset; monthOffset <= r.monthOffset; monthOffset++ {
 		month := now.AddDate(0, monthOffset, 0)
 
-		labels, _ := MockConfig()
+		labels, _ = MockConfig()
 
 		for _, label := range labels.Order {
 			numEntries := rand.IntN(
@@ -72,5 +74,5 @@ func MockCalendar() Calendar {
 			}
 		}
 	}
-	return Calendar{Months: entries}
+	return Calendar{Months: entries, Labels: labels}
 }

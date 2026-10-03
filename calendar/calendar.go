@@ -29,7 +29,11 @@ func NewCalendar() Calendar {
 	}
 }
 
-func (c Calendar) Render() string {
+func (c Calendar) Init() tea.Cmd {
+	return nil
+}
+
+func (c Calendar) View() tea.View {
 	var out string
 
 	out = c.Style.RenderHeader() + strings.Repeat("\n", c.Style.RowSpacing+1)
@@ -60,22 +64,27 @@ func (c Calendar) Render() string {
 		out += strings.Repeat("\n", c.Style.RowSpacing+1)
 	}
 
-	return lipgloss.NewStyle().Padding(1, 1).Render(out)
+	return tea.NewView(lipgloss.NewStyle().Padding(1, 1).Render(out))
 }
 
 // hjkl - movements
-// x 	- mark/unmark
-func (c *Calendar) Update(msg tea.KeyPressMsg) {
-	switch msg.String() {
-	case "h":
-		c.Movement(Left)
-	case "j":
-		c.Movement(Down)
-	case "k":
-		c.Movement(Up)
-	case "l":
-		c.Movement(Right)
-	case "x":
-		c.ToggleMark()
+// x    - mark/unmark
+func (c Calendar) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if msg, ok := msg.(tea.KeyMsg); ok {
+		switch msg.String() {
+		case "h":
+			c.Movement(Left)
+		case "j":
+			c.Movement(Down)
+		case "k":
+			c.Movement(Up)
+		case "l":
+			c.Movement(Right)
+		case "x":
+			c.ToggleMark()
+		case "q", "ctrl+c":
+			return c, tea.Quit
+		}
 	}
+	return c, nil
 }

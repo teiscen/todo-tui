@@ -1,7 +1,6 @@
 package calendar
 
 import (
-	"fmt"
 	"time"
 
 	backend "todo-tui/backend_old"
@@ -33,72 +32,72 @@ func TestCalendar() Calendar {
 	return c
 }
 
-func CalendarTestPrint() {
-	c := TestCalendar()
-	println(c.Render())
-}
-
-func CalendarTestUpdate() {
-	// fmt.Print("\034[H\033[2J") // Clear console ANSI escape sequence
-	locn := time.Now().Location()
-	sep27 := time.Date(2026, time.September, 27, 0, 0, 0, 0, locn)
-	oct13 := time.Date(2026, time.October, 13, 0, 0, 0, 0, locn)
-	oct17 := time.Date(2026, time.October, 17, 0, 0, 0, 0, locn)
-
-	c := TestCalendar()
-
-	for range 10 {
-		// Reset back to start
-		c.SelectedDate = backend.TimeToDate(oct13)
-		println(c.Render())
-		time.Sleep(1 * time.Second)
-
-		// Left
-		fmt.Print("\034[H\033[2J")
-		// c.Update()
-		c.Movement(Up)
-		println(c.Render())
-		time.Sleep(1 * time.Second)
-
-		// Right
-		fmt.Print("\034[H\033[2J")
-		// c.Update()
-		c.Movement(Down)
-		println(c.Render())
-		time.Sleep(1 * time.Second)
-
-		// Down
-		fmt.Print("\034[H\033[2J")
-		// c.Update()
-		c.Movement(Right)
-		println(c.Render())
-		time.Sleep(1 * time.Second)
-
-		// Up
-		fmt.Print("\034[H\033[2J")
-		// c.Update()
-		c.Movement(Left)
-		println(c.Render())
-		time.Sleep(1 * time.Second)
-
-		// Toggle Marks
-		fmt.Print("\034[H\033[2J")
-		// c.Update()
-		c.ToggleMark()
-		println(c.Render())
-		time.Sleep(1 * time.Second)
-		c.ToggleMark()
-		println(c.Render())
-		time.Sleep(1 * time.Second)
-
-		// First Index in grid [0][0]
-		c.SelectedDate = backend.TimeToDate(sep27)
-		println(c.Render())
-		time.Sleep(1 * time.Second)
-
-		// Weekend Example
-		c.SelectedDate = backend.TimeToDate(oct17)
-		println(c.Render())
-		time.Sleep(1 * time.Second)
-	}
-}
+// func CalendarTestPrint() {
+// 	c := TestCalendar()
+// 	println(c.View())
+// }
+//
+// func CalendarTestUpdate() {
+// 	// fmt.Print("\034[H\033[2J") // Clear console ANSI escape sequence
+// 	locn := time.Now().Location()
+// 	sep27 := time.Date(2026, time.September, 27, 0, 0, 0, 0, locn)
+// 	oct13 := time.Date(2026, time.October, 13, 0, 0, 0, 0, locn)
+// 	oct17 := time.Date(2026, time.October, 17, 0, 0, 0, 0, locn)
+//
+// 	c := TestCalendar()
+//
+// 	for range 10 {
+// 		// Reset back to start
+// 		c.SelectedDate = backend.TimeToDate(oct13)
+// 		println(c.View())
+// 		time.Sleep(1 * time.Second)
+//
+// 		// Left
+// 		fmt.Print("\034[H\033[2J")
+// 		// c.Update()
+// 		c.Movement(Up)
+// 		println(c.View())
+// 		time.Sleep(1 * time.Second)
+//
+// 		// Right
+// 		fmt.Print("\034[H\033[2J")
+// 		// c.Update()
+// 		c.Movement(Down)
+// 		println(c.View())
+// 		time.Sleep(1 * time.Second)
+//
+// 		// Down
+// 		fmt.Print("\034[H\033[2J")
+// 		// c.Update()
+// 		c.Movement(Right)
+// 		println(c.View())
+// 		time.Sleep(1 * time.Second)
+//
+// 		// Up
+// 		fmt.Print("\034[H\033[2J")
+// 		// c.Update()
+// 		c.Movement(Left)
+// 		println(c.View())
+// 		time.Sleep(1 * time.Second)
+//
+// 		// Toggle Marks
+// 		fmt.Print("\034[H\033[2J")
+// 		// c.Update()
+// 		c.ToggleMark()
+// 		println(c.View())
+// 		time.Sleep(1 * time.Second)
+// 		c.ToggleMark()
+// 		println(c.View())
+// 		time.Sleep(1 * time.Second)
+//
+// 		// First Index in grid [0][0]
+// 		c.SelectedDate = backend.TimeToDate(sep27)
+// 		println(c.View())
+// 		time.Sleep(1 * time.Second)
+//
+// 		// Weekend Example
+// 		c.SelectedDate = backend.TimeToDate(oct17)
+// 		println(c.View())
+// 		time.Sleep(1 * time.Second)
+// 	}
+// }

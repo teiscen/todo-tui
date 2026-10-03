@@ -17,15 +17,18 @@ type Notes struct {
 
 func NewNotes(initText string) Notes {
 	ta := textarea.New()
-	ta.SetValue(initText)
-	ta.SetWidth(WIDTH)
-	ta.SetHeight(HEIGHT)
-	style := GetDefaultStyle()
 
 	ta.Prompt = ""
 	ta.Placeholder = "No Entry Found."
 	ta.ShowLineNumbers = false
+	ta.EndOfBufferCharacter = '~'
 	ta.KeyMap = textarea.DefaultKeyMap()
+
+	ta.SetValue(initText)
+	ta.SetWidth(WIDTH)
+	ta.SetHeight(HEIGHT)
+	ta.Focus()
+	style := GetDefaultStyle()
 
 	return Notes{
 		TextArea: ta,
@@ -33,42 +36,31 @@ func NewNotes(initText string) Notes {
 	}
 }
 
-func (n Notes) Render() string {
+func (n Notes) Init() tea.Cmd {
+	return nil
+}
+
+func (n Notes) View() tea.View {
 	// May need to check the focus status
 	n.TextArea.SetStyles(n.Style.Styles)
-	return n.TextArea.View()
+	return tea.NewView(n.TextArea.View())
 }
 
-func (n *Notes) Update(msg tea.KeyPressMsg) {
-	switch msg.String() {
-	case "ctrl+w":
-		(*n).ToggleFocus()
+func (n Notes) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+w":
+			n.ToggleFocus()
+			return n, nil
+		case "ctrl+c":
+			return n, tea.Quit
+		}
 	}
-	n.TextArea, _ = n.TextArea.Update(msg)
-}
 
-// MODELS require
-// func (m Model) Init() tea.Cmd {
-// func (m Model) View() tea.View {
-// func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-//
-// func (n *Notes) Update(msg tea.Msg) tea.Cmd {
-// 	var cmd tea.Cmd
-//
-// 	switch msg := msg.(type) {
-// 	case tea.KeyMsg:
-// 		switch msg.String() {
-// 		case "ctrl+w":
-// 			if n.TextArea.Focused() {
-// 				n.TextArea.Blur()
-// 				return nil
-// 			}
-// 			// Focus() returns tea.Blink command to start the cursor animation
-// 			return n.TextArea.Focus()
-// 		}
-// 	}
-//
-// 	// Delegate all other messages (keystrokes, cursor blink ticks) to the textarea
-// 	n.TextArea, cmd = n.TextArea.Update(msg)
-// 	return cmd
-// }
+	// Delegate all other messages (keystrokes, cursor blink ticks) to the textarea
+	n.TextArea, cmd = n.TextArea.Update(msg)
+	return n, cmd
+}
