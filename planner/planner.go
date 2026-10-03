@@ -26,7 +26,7 @@ type Planner struct {
 	Focus Focus
 }
 
-func NewPlanner() Planner {
+func NewPlanner(c backend.Calendar) Planner {
 	return Planner{}
 }
 
