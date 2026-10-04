@@ -13,3 +13,7 @@ func (c Calendar) GetEntry(d Date) (val Entry, ok bool) {
 func (c Calendar) GetCurrentLabel() LabelInfo {
 	return c.Labels.Info[c.Labels.Selected]
 }
+
+func (c *Calendar) AddEntry(d Date, val Entry) {
+	c.Months[d][c.Labels.Selected] = val
+}

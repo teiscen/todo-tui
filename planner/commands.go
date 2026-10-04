@@ -1,5 +1,7 @@
 package planner
 
+import backend "todo-tui/backend_old"
+
 // Command:
 // Switch between the labels (updates calendar)
 // Swtich between the months (updates calendar)
@@ -31,4 +33,13 @@ func (p *Planner) UpdateLabel(next bool) {
 	}
 	p.CalendarModel.Style.ColorAccent = p.Calendar.GetCurrentLabel().Color
 	p.CalendarModel.UpdateGrid(p.Calendar)
+}
+
+func (p *Planner) WriteChange() {
+	d := p.CalendarModel.SelectedDate
+	e := backend.Entry{
+		Status: backend.Full,
+		Msg:    p.NotesModel.TextArea.Value(),
+	}
+	p.Calendar.AddEntry(d, e)
 }

@@ -113,6 +113,8 @@ func (p Planner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+l":
 			// Swap Calendar for next label
 			p.UpdateLabel(true)
+		case "ctrl+r":
+			p.WriteChange()
 		case "ctrl+c":
 			return p, tea.Quit
 		}
@@ -125,13 +127,14 @@ func (p Planner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.NotesModel, cmd = p.NotesModel.Update(msg)
 	}
 
+	// TODO: refactor so its not ungly
+	// Update Calendar if its a new month
+	// Update Notes value if the day changed
+	// Need to update calendar via result from x CalendarModel
 	newStr := ""
 	if newText, ok := p.Calendar.GetEntry(p.CalendarModel.SelectedDate); ok {
 		newStr = newText.Msg
 	}
-	// TODO refactor so its not ungly
-	// Update Calendar if its a new month
-	// Update Notes value if the day changed
 	if prevDate.Month != p.CalendarModel.SelectedDate.Month {
 		p.CalendarModel.UpdateGrid(p.Calendar)
 		p.NotesModel.ChangeValue(newStr)
