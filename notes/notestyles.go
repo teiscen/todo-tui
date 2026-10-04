@@ -1,7 +1,7 @@
 package notes
 
 import (
-	backend "todo-tui/backend_old"
+	backend "todo-tui/backend"
 
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"

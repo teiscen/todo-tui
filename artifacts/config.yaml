@@ -1,0 +1,39 @@
+# -- Calendar --
+# Colors: Weekend, Weekday, Accent
+#
+# -- Notes --
+# Colors: Text, Accent
+#
+# -- Planner -- 
+# Color: Border 
+#
+# -- Labels -- 
+# Selected: LabelID
+# Order:    []LabelID
+# Info:     map[LabelID]LabelInfo
+
+colors:
+  text:    "#C6D0F5"
+  border:  "#C6D0F5"
+  weekday: "#C6D0F5"
+  weekend: "#939AB7"
+  
+labels:
+  selected: uni
+  order: [uni, work, gym, app, vol]
+  info: 
+    uni: 
+      name: University
+      color: "#81c8be"
+  work:
+    name: Work
+    color: "#ca9ee6"
+  gym:
+    name: Gym
+    color: "#ef9f76"
+  app:
+    name: Application
+    color: "#babbf1"
+  vol:
+    name: Volunteer
+    color: "#f2d5cf"   

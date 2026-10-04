@@ -1,7 +1,7 @@
 package planner
 
 import (
-	backend "todo-tui/backend_old"
+	backend "todo-tui/backend"
 )
 
 type PlannerStyle struct {

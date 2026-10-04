@@ -1,42 +1,44 @@
-package backend
+package main
 
 import (
 	"math/rand"
 	"time"
+
+	"todo-tui/backend"
 )
 
-func MockCalendar() Calendar {
-	labels := Labels{
+func MockCalendar() backend.Calendar {
+	labels := backend.Labels{
 		Selected: "uni",
-		Info: map[LabelID]LabelInfo{
-			"uni":  {Name: "University", Color: HexCode("#81c8be")},
-			"work": {Name: "Work", Color: HexCode("#ca9ee6")},
-			"gym":  {Name: "Gym", Color: HexCode("#ef9f76")},
-			"app":  {Name: "Application", Color: HexCode("#babbf1")},
-			"vol":  {Name: "Volunteer", Color: HexCode("#f2d5cf")},
+		Info: map[backend.LabelID]backend.LabelInfo{
+			"uni":  {Name: "University", Color: backend.HexCode("#81c8be")},
+			"work": {Name: "Work", Color: backend.HexCode("#ca9ee6")},
+			"gym":  {Name: "Gym", Color: backend.HexCode("#ef9f76")},
+			"app":  {Name: "Application", Color: backend.HexCode("#babbf1")},
+			"vol":  {Name: "Volunteer", Color: backend.HexCode("#f2d5cf")},
 		},
-		Order: []LabelID{
+		Order: []backend.LabelID{
 			"uni", "work", "gym", "app", "vol",
 		},
 	}
 
 	// Fixed seed so the mock data is identical on every run.
 	rng := rand.New(rand.NewSource(2026))
-	months := make(map[Date]map[LabelID]Entry)
+	months := make(map[backend.Date]map[backend.LabelID]backend.Entry)
 
-	set := func(d Date, id LabelID, s Status, msg string) {
+	set := func(d backend.Date, id backend.LabelID, s backend.Status, msg string) {
 		if months[d] == nil {
-			months[d] = make(map[LabelID]Entry)
+			months[d] = make(map[backend.LabelID]backend.Entry)
 		}
-		months[d][id] = Entry{Status: s, Msg: msg}
+		months[d][id] = backend.Entry{Status: s, Msg: msg}
 	}
 	pick := func(s []string) string { return s[rng.Intn(len(s))] }
 	// Full most of the time, Partial with probability p.
-	roll := func(p float64) Status {
+	roll := func(p float64) backend.Status {
 		if rng.Float64() < p {
-			return Partial
+			return backend.Partial
 		}
-		return Full
+		return backend.Full
 	}
 
 	uniMsgs := []string{
@@ -84,7 +86,7 @@ func MockCalendar() Calendar {
 	}
 	volPartial := []string{"Helped for an hour", "Left early"}
 
-	start := Date{Year: 2026, Month: 9, Date: 1}
+	start := backend.Date{Year: 2026, Month: 9, Date: 1}
 	// Sep (30) + Oct (31) + Nov (30) = 91 days.
 	for i := 0; i < 91; i++ {
 		d := start.AddDate(0, 0, i)
@@ -95,27 +97,27 @@ func MockCalendar() Calendar {
 		// University: weekdays, with the odd light Sunday study session.
 		switch {
 		case isWeekday && examSeason:
-			set(d, "uni", Full, pick(examMsgs))
+			set(d, "uni", backend.Full, pick(examMsgs))
 		case isWeekday:
-			if s := roll(0.15); s == Partial {
+			if s := roll(0.15); s == backend.Partial {
 				set(d, "uni", s, pick(uniPartial))
 			} else {
 				set(d, "uni", s, pick(uniMsgs))
 			}
 		case wd == time.Sunday && rng.Float64() < 0.4:
-			set(d, "uni", Partial, "Light study session")
+			set(d, "uni", backend.Partial, "Light study session")
 		}
 
 		// Work: Tue/Thu evenings, Saturday day shift.
 		switch wd {
 		case time.Tuesday, time.Thursday:
-			if s := roll(0.1); s == Partial {
+			if s := roll(0.1); s == backend.Partial {
 				set(d, "work", s, "Left early")
 			} else {
 				set(d, "work", s, "Evening shift 4pm-10pm")
 			}
 		case time.Saturday:
-			if s := roll(0.1); s == Partial {
+			if s := roll(0.1); s == backend.Partial {
 				set(d, "work", s, "Left early")
 			} else {
 				set(d, "work", s, "Day shift 9am-5pm")
@@ -124,7 +126,7 @@ func MockCalendar() Calendar {
 
 		// Gym: Mon/Wed/Fri/Sun, ~20% of sessions skipped entirely.
 		if msg, ok := gymByDay[wd]; ok && rng.Float64() > 0.2 {
-			if s := roll(0.15); s == Partial {
+			if s := roll(0.15); s == backend.Partial {
 				set(d, "gym", s, pick(gymPartial))
 			} else {
 				set(d, "gym", s, msg)
@@ -133,7 +135,7 @@ func MockCalendar() Calendar {
 
 		// Applications: ~30% of weekdays.
 		if isWeekday && rng.Float64() < 0.3 {
-			if s := roll(0.4); s == Partial {
+			if s := roll(0.4); s == backend.Partial {
 				set(d, "app", s, pick(appPartial))
 			} else {
 				set(d, "app", s, pick(companies))
@@ -142,7 +144,7 @@ func MockCalendar() Calendar {
 
 		// Volunteering: most Sundays.
 		if wd == time.Sunday && rng.Float64() < 0.6 {
-			if s := roll(0.15); s == Partial {
+			if s := roll(0.15); s == backend.Partial {
 				set(d, "vol", s, pick(volPartial))
 			} else {
 				set(d, "vol", s, pick(volMsgs))
@@ -150,7 +152,7 @@ func MockCalendar() Calendar {
 		}
 	}
 
-	return Calendar{
+	return backend.Calendar{
 		Months: months,
 		Labels: labels,
 	}

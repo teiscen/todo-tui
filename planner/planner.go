@@ -3,7 +3,7 @@ package planner
 import (
 	"strings"
 
-	backend "todo-tui/backend_old"
+	backend "todo-tui/backend"
 	"todo-tui/calendar"
 	"todo-tui/notes"
 

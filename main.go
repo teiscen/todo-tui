@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"os"
 
-	"todo-tui/planner"
-
 	tea "charm.land/bubbletea/v2"
 )
 
 func main() {
+	configPath := "./artifacts/config.yaml"
+	config, _ := LoadConfig(configPath)
 	// calendar.CalendarTestPrint()
 	// calendar.CalendarTestUpdate()
 
@@ -23,7 +23,8 @@ func main() {
 	// note := notes.TestNotes()
 	// p := tea.NewProgram(note)
 
-	planner := planner.TestPlanner()
+	// planner := planner.TestPlanner()
+	planner := config.LoadPlannerModel()
 	p := tea.NewProgram(planner)
 
 	if _, err := p.Run(); err != nil {

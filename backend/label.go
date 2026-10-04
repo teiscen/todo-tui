@@ -5,13 +5,13 @@ import "slices"
 type (
 	LabelID   string
 	LabelInfo struct {
-		Name  string
-		Color HexCode
+		Name  string  `yaml:"name"`
+		Color HexCode `yaml:"color"`
 	}
 	Labels struct {
-		Selected LabelID
-		Info     map[LabelID]LabelInfo
-		Order    []LabelID
+		Selected LabelID               `yaml:"selected"`
+		Info     map[LabelID]LabelInfo `yaml:"info"`
+		Order    []LabelID             `yaml:"order"`
 	}
 )
 

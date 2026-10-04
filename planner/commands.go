@@ -1,6 +1,6 @@
 package planner
 
-import backend "todo-tui/backend_old"
+import backend "todo-tui/backend"
 
 // Command:
 // Switch between the labels (updates calendar)

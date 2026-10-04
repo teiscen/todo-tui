@@ -1,19 +1,13 @@
 package calendar
 
-import (
-	"time"
-
-	backend "todo-tui/backend_old"
-)
-
-func TestCalendar() Calendar {
-	locn := time.Now().Location()
-	oct13 := time.Date(2026, time.October, 13, 0, 0, 0, 0, locn)
-	c := NewCalendar()
-	c.SelectedDate = backend.TimeToDate(oct13)
-	c.UpdateGrid(backend.MockCalendar())
-	return c
-}
+// func TestCalendar() Calendar {
+// 	locn := time.Now().Location()
+// 	oct13 := time.Date(2026, time.October, 13, 0, 0, 0, 0, locn)
+// 	c := NewCalendar()
+// 	c.SelectedDate = backend.TimeToDate(oct13)
+// 	c.UpdateGrid(main.MockCalendar())
+// 	return c
+// }
 
 // func TestCalendarOld() Calendar {
 // 	locn := time.Now().Location()

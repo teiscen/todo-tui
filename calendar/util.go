@@ -1,6 +1,6 @@
 package calendar
 
-import backend "todo-tui/backend_old"
+import backend "todo-tui/backend"
 
 func (c Calendar) GetSelectedColor() backend.HexCode {
 	for row := range c.Grid {
