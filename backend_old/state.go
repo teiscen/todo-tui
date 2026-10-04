@@ -35,14 +35,14 @@ func (s State) NextLabel() LabelID {
 	return s.SelectedLabel
 }
 
-func (s State) getSelectedDateColor() HexCode {
-	_, ok := s.Calendar.getEntry(s.SelectedDate, s.SelectedLabel)
-	color := s.Colors["valid"]
-	if ok {
-		color = s.Colors[s.getLabel().ColorID]
-	}
-	return color
-}
+// func (s State) getSelectedDateColor() HexCode {
+// _, ok := s.Calendar.getEntry(s.SelectedDate, s.SelectedLabel)
+// color := s.Colors["valid"]
+// if ok {
+// 	color = s.Colors[s.getLabel().ColorID]
+// }
+// return color
+// }
 
 func (s State) getColor(cID ColorID) (HexCode, bool) {
 	c, ok := s.Colors[cID]
@@ -81,7 +81,7 @@ type Grid [6][7]GridCell
 func (s State) getGrid() (grid Grid) {
 	cValid, _ := s.getColor("valid")
 	cInvalid, _ := s.getColor("invalid")
-	cLabel, _ := s.getColor(s.getLabel().ColorID)
+	// cLabel, _ := s.getColor(s.getLabel().ColorID)
 
 	firstDateIdx := int(s.SelectedDate.FirstDay().Weekday())
 	lastDateIdx := firstDateIdx + s.SelectedDate.NumDays()
@@ -102,7 +102,7 @@ func (s State) getGrid() (grid Grid) {
 
 			val, ok := s.Calendar.getEntry(date, s.SelectedLabel)
 			if ok {
-				color = cLabel
+				// color = cLabel
 				status = val.Status
 			} else {
 				if valid {
@@ -171,15 +171,15 @@ type PlannerRenderInfo struct {
 
 func (s State) GetPlannerRenderInfo() PlannerRenderInfo {
 	return PlannerRenderInfo{
-		ColoredString{
-			s.SelectedDate.Format(),
-			s.getSelectedDateColor(),
-		},
-		ColoredString{
-			s.getLabel().Name,
-			s.Colors[s.getLabel().ColorID],
-		},
-		s.Colors["valid"],
+		// ColoredString{
+		// s.SelectedDate.Format(),
+		// s.getSelectedDateColor(),
+		// },
+		// ColoredString{
+		// s.getLabel().Name,
+		// s.Colors[s.getLabel().ColorID],
+		// },
+		// s.Colors["valid"],
 	}
 }
 

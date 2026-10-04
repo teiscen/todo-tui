@@ -27,7 +27,7 @@ func NewNotes(initText string) Notes {
 	ta.SetValue(initText)
 	ta.SetWidth(WIDTH)
 	ta.SetHeight(HEIGHT)
-	ta.Focus()
+	ta.Blur()
 	style := GetDefaultStyle()
 
 	return Notes{

@@ -3,12 +3,13 @@ package backend
 type (
 	LabelID   string
 	LabelInfo struct {
-		Name    string
-		ColorID ColorID
+		Name  string
+		Color HexCode
 	}
 	Labels struct {
-		Info  map[LabelID]LabelInfo
-		Order []LabelID
+		Selected LabelID
+		Info     map[LabelID]LabelInfo
+		Order    []LabelID
 	}
 )
 

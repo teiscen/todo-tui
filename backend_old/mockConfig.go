@@ -22,19 +22,16 @@ func defaultConfig() Config {
 		},
 
 		Labels: Labels{
+			Selected: "uni",
 			Info: map[LabelID]LabelInfo{
-				"task": {
-					Name:    "Tasks",
-					ColorID: ColorID("red"),
-				},
-				"university": {
-					Name:    "University",
-					ColorID: ColorID("blue"),
-				},
+				"uni":  {Name: "University", Color: HexCode("#81c8be")},
+				"work": {Name: "Work", Color: HexCode("#ca9ee6")},
+				"gym":  {Name: "Gym", Color: HexCode("#ef9f76")},
+				"app":  {Name: "Application", Color: HexCode("#babbf1")},
+				"vol":  {Name: "Volunteer", Color: HexCode("#f2d5cf")},
 			},
 			Order: []LabelID{
-				"task",
-				"university",
+				"uni", "work", "gym", "app", "vol",
 			},
 		},
 	}

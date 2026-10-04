@@ -36,9 +36,11 @@ func (c Calendar) Init() tea.Cmd {
 func (c Calendar) View() tea.View {
 	var out string
 
-	out = c.Style.RenderHeader() + strings.Repeat("\n", c.Style.RowSpacing+1)
+	out = c.Style.RenderHeader()
 
 	for row := range c.Grid {
+		out += strings.Repeat("\n", c.Style.RowSpacing+1)
+
 		for col := range c.Grid[row] {
 			cell := c.Grid[row][col]
 
@@ -60,11 +62,10 @@ func (c Calendar) View() tea.View {
 
 			out += style.Render(icon)
 		}
-		// Need the default 1, so added +1 spacing
-		out += strings.Repeat("\n", c.Style.RowSpacing+1)
 	}
 
-	return tea.NewView(lipgloss.NewStyle().Padding(1, 1).Render(out))
+	cal := lipgloss.NewStyle().Padding(1, 1).Render(out)
+	return tea.NewView(cal)
 }
 
 // hjkl - movements
