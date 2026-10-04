@@ -27,39 +27,7 @@ type Planner struct {
 	Focus    Focus
 }
 
-func NewPlanner(c backend.Calendar) Planner {Fr  Sa  │
-│                              │
-│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
-│                              │
-│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
-│                              │
-│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
-│                              │
-│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
-│                              │
-│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
-│                              │
-│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
-│                              │
-├──────── Application ────────┤
-│                              │
-│ hlkjhflskadjhjjjlkjl;skjlkjl │
-│ kj                           │
-│                              │
-│                              │
-│ kljlkj                       │
-│ ~                            │
-│ ~                            │
-│ ~                            │
-│ ~                            │
-│ ~                            │
-│ ~                            │
-│ ~                            │
-│ ~                            │
-│ ~                            │
-│ ~                            │
-│ ~                            │
-│ ~                            │
+func NewPlanner(c backend.Calendar) Planner {
 	return Planner{
 		NotesModel:    notes.NewNotes(""),
 		CalendarModel: calendar.NewCalendar(),
@@ -86,15 +54,21 @@ func (p Planner) View() tea.View {
 	footerFormatted := footerStyle.Render(footerText)
 
 	width := 30
-	padding := func(str string) string {
-		return strings.Repeat("─", max(0, (width-lipgloss.Width(str))/2))
+	padding := func(str string) (left, right string) {
+		pad := strings.Repeat("─", max(0, (width-lipgloss.Width(str))/2))
+		if lipgloss.Width(str)%2 == 1 {
+			right = "─"
+		}
+		left += pad
+		right += pad
+		return
 	}
 
-	headerPadding := padding(headerFormatted)
-	footerPadding := padding(footerFormatted)
+	headerPaddingL, headerPaddingR := padding(headerFormatted)
+	footerPaddingL, footerPaddingR := padding(footerFormatted)
 
-	headerFull := "╭" + headerPadding + headerFormatted + headerPadding + "╮"
-	footerFull := "├" + footerPadding + footerFormatted + footerPadding + "┤"
+	headerFull := "╭" + headerPaddingL + headerFormatted + headerPaddingR + "╮"
+	footerFull := "├" + footerPaddingL + footerFormatted + footerPaddingR + "┤"
 
 	notesView := p.NotesModel.View().Content
 	calendarView := p.CalendarModel.View().Content
@@ -117,6 +91,8 @@ func (p Planner) View() tea.View {
 }
 
 func (p Planner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	prevDate := p.CalendarModel.SelectedDate
+
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -144,13 +120,23 @@ func (p Planner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch p.Focus {
 	case FocusCalendar:
-		prevDate := p.CalendarModel.SelectedDate
 		p.CalendarModel, cmd = p.CalendarModel.Update(msg)
-		if prevDate.Month != p.CalendarModel.SelectedDate.Month {
-			p.CalendarModel.UpdateGrid(p.Calendar)
-		}
 	case FocusNotes:
 		p.NotesModel, cmd = p.NotesModel.Update(msg)
+	}
+
+	newStr := ""
+	if newText, ok := p.Calendar.GetEntry(p.CalendarModel.SelectedDate); ok {
+		newStr = newText.Msg
+	}
+	// TODO refactor so its not ungly
+	// Update Calendar if its a new month
+	// Update Notes value if the day changed
+	if prevDate.Month != p.CalendarModel.SelectedDate.Month {
+		p.CalendarModel.UpdateGrid(p.Calendar)
+		p.NotesModel.ChangeValue(newStr)
+	} else if prevDate != p.CalendarModel.SelectedDate {
+		p.NotesModel.ChangeValue(newStr)
 	}
 
 	return p, cmd

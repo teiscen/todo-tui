@@ -87,5 +87,6 @@ func (c Calendar) Update(msg tea.Msg) (Calendar, tea.Cmd) {
 			return c, tea.Quit
 		}
 	}
+
 	return c, nil
 }

@@ -50,6 +50,8 @@ func (c *Calendar) UpdateGrid(cal backend.Calendar) {
 				IsValid:  checkValid(date),
 				IsMarked: checkMarked(date),
 			}
+
+			date = date.AddDate(0, 0, 1)
 		}
 	}
 }

@@ -1,5 +1,12 @@
 package main
 
+//*
+// First Render Color is wrong, need to fix that in Planner Init()
+// Based on wether footer or header is odd numbered in lenght
+// 	- the padding is inedequate
+//
+//
+
 import (
 	"fmt"
 	"os"

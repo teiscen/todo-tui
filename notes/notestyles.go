@@ -24,9 +24,9 @@ func (n NotesStyle) GenStyle() textarea.Styles {
 	if err != nil {
 		cTextMute = cText
 	}
-	cElseMute, err := cAccent.MuteColorTarget(backend.HexCode("#303446"), 0.8)
+	cAccentMute, err := cAccent.MuteColorTarget(backend.HexCode("#303446"), 0.8)
 	if err != nil {
-		cElseMute = cAccent
+		cAccentMute = cAccent
 	}
 
 	focused := textarea.StyleState{
@@ -34,7 +34,7 @@ func (n NotesStyle) GenStyle() textarea.Styles {
 		Text:             cText.ToStyle(),
 		LineNumber:       lipgloss.NewStyle(), // Not Used
 		CursorLineNumber: lipgloss.NewStyle(), // Not Used
-		CursorLine:       lipgloss.NewStyle().Background(lipgloss.Color(string(cElseMute))),
+		CursorLine:       lipgloss.NewStyle().Background(lipgloss.Color(string(cAccentMute))),
 		EndOfBuffer:      cAccent.ToStyle(),
 		Placeholder:      cAccent.ToStyle(),
 		Prompt:           lipgloss.NewStyle(), // Not Used
@@ -45,9 +45,9 @@ func (n NotesStyle) GenStyle() textarea.Styles {
 		Text:             cTextMute.ToStyle(),
 		LineNumber:       lipgloss.NewStyle(), // Not Used
 		CursorLineNumber: lipgloss.NewStyle(), // Not Used
-		CursorLine:       lipgloss.NewStyle().Background(lipgloss.Color(string(cElseMute))),
-		EndOfBuffer:      cElseMute.ToStyle(),
-		Placeholder:      cElseMute.ToStyle(),
+		CursorLine:       lipgloss.NewStyle().Background(lipgloss.Color(string(cAccentMute))),
+		EndOfBuffer:      cAccentMute.ToStyle(),
+		Placeholder:      cAccent.ToStyle(),
 		Prompt:           lipgloss.NewStyle(), // Not Used
 	}
 	cursor := textarea.CursorStyle{

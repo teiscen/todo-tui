@@ -10,13 +10,15 @@ func (p *Planner) ToggleFocus() {
 	} else {
 		p.Focus = FocusCalendar
 	}
+	p.NotesModel.ToggleFocus()
 }
 
 func (p *Planner) UpdateMonth(next bool) {
+	curr := p.CalendarModel.SelectedDate
 	if next {
-		p.CalendarModel.SelectedDate.AddDate(0, 1, 0)
+		p.CalendarModel.SelectedDate = curr.AddDate(0, 1, 0)
 	} else {
-		p.CalendarModel.SelectedDate.AddDate(0, -1, 0)
+		p.CalendarModel.SelectedDate = curr.AddDate(0, -1, 0)
 	}
 	p.CalendarModel.UpdateGrid(p.Calendar)
 }
@@ -27,5 +29,6 @@ func (p *Planner) UpdateLabel(next bool) {
 	} else {
 		p.Calendar.Labels.Step(false)
 	}
+	p.CalendarModel.Style.ColorAccent = p.Calendar.GetCurrentLabel().Color
 	p.CalendarModel.UpdateGrid(p.Calendar)
 }
