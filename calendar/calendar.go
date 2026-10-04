@@ -70,7 +70,7 @@ func (c Calendar) View() tea.View {
 
 // hjkl - movements
 // x    - mark/unmark
-func (c Calendar) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (c Calendar) Update(msg tea.Msg) (Calendar, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "h":

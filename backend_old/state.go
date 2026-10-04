@@ -78,90 +78,90 @@ type GridCell struct {
 }
 type Grid [6][7]GridCell
 
-func (s State) getGrid() (grid Grid) {
-	cValid, _ := s.getColor("valid")
-	cInvalid, _ := s.getColor("invalid")
-	// cLabel, _ := s.getColor(s.getLabel().ColorID)
+// func (s State) getGrid() (grid Grid) {
+// 	cValid, _ := s.getColor("valid")
+// 	cInvalid, _ := s.getColor("invalid")
+// 	// cLabel, _ := s.getColor(s.getLabel().ColorID)
+//
+// 	firstDateIdx := int(s.SelectedDate.FirstDay().Weekday())
+// 	lastDateIdx := firstDateIdx + s.SelectedDate.NumDays()
+//
+// 	isValid := func(row, col int) bool {
+// 		idx := row*7 + col
+// 		return firstDateIdx <= idx && idx < lastDateIdx
+// 	}
+//
+// 	date := s.SelectedDate.FirstDay().AddDate(0, 0, -firstDateIdx)
+//
+// 	for row := range grid {
+// 		for col := range grid[row] {
+// 			valid := isValid(row, col)
+//
+// 			var color HexCode
+// 			var status Status
+//
+// 			// val, ok := s.Calendar.getEntry(date, s.SelectedLabel)
+// 			// if ok {
+// 			// 	// color = cLabel
+// 			// 	status = val.Status
+// 			// } else {
+// 			// 	if valid {
+// 			// 		color = cValid
+// 			// 	} else {
+// 			// 		color = cInvalid
+// 			// 	}
+// 			// 	status = NoEntry
+// 			// }
+//
+// 			hovered := date == s.SelectedDate
+//
+// 			grid[row][col] = GridCell{
+// 				color,
+// 				status,
+// 				hovered,
+// 				valid,
+// 			}
+//
+// 			date = date.AddDate(0, 0, 1)
+// 		}
+// 	}
+//
+// 	return
+// }
+//
+// type CalendarRenderInfo struct {
+// 	Grid Grid
+// }
 
-	firstDateIdx := int(s.SelectedDate.FirstDay().Weekday())
-	lastDateIdx := firstDateIdx + s.SelectedDate.NumDays()
-
-	isValid := func(row, col int) bool {
-		idx := row*7 + col
-		return firstDateIdx <= idx && idx < lastDateIdx
-	}
-
-	date := s.SelectedDate.FirstDay().AddDate(0, 0, -firstDateIdx)
-
-	for row := range grid {
-		for col := range grid[row] {
-			valid := isValid(row, col)
-
-			var color HexCode
-			var status Status
-
-			val, ok := s.Calendar.getEntry(date, s.SelectedLabel)
-			if ok {
-				// color = cLabel
-				status = val.Status
-			} else {
-				if valid {
-					color = cValid
-				} else {
-					color = cInvalid
-				}
-				status = NoEntry
-			}
-
-			hovered := date == s.SelectedDate
-
-			grid[row][col] = GridCell{
-				color,
-				status,
-				hovered,
-				valid,
-			}
-
-			date = date.AddDate(0, 0, 1)
-		}
-	}
-
-	return
-}
-
-type CalendarRenderInfo struct {
-	Grid Grid
-}
-
-// Need to handle the Color not existing
-func (s State) GetCalendarRenderInfo() CalendarRenderInfo {
-	g := s.getGrid()
-
-	return CalendarRenderInfo{
-		// labelStr,
-		// dateString,
-		g,
-	}
-}
+// // Need to handle the Color not existing
+// func (s State) GetCalendarRenderInfo() CalendarRenderInfo {
+// 	g := s.getGrid()
+//
+// 	return CalendarRenderInfo{
+// 		// labelStr,
+// 		// dateString,
+// 		g,
+// 	}
+// }
 
 type NoteRenderInfo struct {
 	IsFocused bool
 	Msg       string
 }
 
-func (s State) GetNoteRenderInfo() NoteRenderInfo {
-	e, ok := s.Calendar.getEntry(s.SelectedDate, s.SelectedLabel)
-	var str string
-	if !ok {
-		str = "No Entry Found"
-	} else {
-		str = e.Msg
-	}
-	return NoteRenderInfo{
-		s.NoteFocused,
-		str,
-	}
-}
+// func (s State) GetNoteRenderInfo() NoteRenderInfo {
+// 	// e, ok := s.Calendar.getEntry(s.SelectedDate, s.SelectedLabel)
+// 	var str string
+// 	if !ok {
+// 		str = "No Entry Found"
+// 	} else {
+// 		str = e.Msg
+// 	}
+// 	return NoteRenderInfo{
+// 		s.NoteFocused,
+// 		str,
+// 	}
+// }
 
 type PlannerRenderInfo struct {
 	Header      ColoredString

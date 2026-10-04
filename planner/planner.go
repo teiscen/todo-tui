@@ -27,7 +27,39 @@ type Planner struct {
 	Focus    Focus
 }
 
-func NewPlanner(c backend.Calendar) Planner {
+func NewPlanner(c backend.Calendar) Planner {Fr  Sa  │
+│                              │
+│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
+│                              │
+│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
+│                              │
+│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
+│                              │
+│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
+│                              │
+│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
+│                              │
+│  ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   ⬤   │
+│                              │
+├──────── Application ────────┤
+│                              │
+│ hlkjhflskadjhjjjlkjl;skjlkjl │
+│ kj                           │
+│                              │
+│                              │
+│ kljlkj                       │
+│ ~                            │
+│ ~                            │
+│ ~                            │
+│ ~                            │
+│ ~                            │
+│ ~                            │
+│ ~                            │
+│ ~                            │
+│ ~                            │
+│ ~                            │
+│ ~                            │
+│ ~                            │
 	return Planner{
 		NotesModel:    notes.NewNotes(""),
 		CalendarModel: calendar.NewCalendar(),
@@ -38,13 +70,14 @@ func NewPlanner(c backend.Calendar) Planner {
 	}
 }
 
+// Make the model use the current things
 func (p Planner) Init() tea.Cmd {
 	return nil
 }
 
 func (p Planner) View() tea.View {
-	headerStyle := p.CalendarModel.GetSelectedColor().ToStyle().Padding(0, 1)
-	footerStyle := p.Calendar.GetCurrentLabel().Color.ToStyle().Padding(0, 1)
+	headerStyle := p.CalendarModel.GetSelectedColor().ToStyle().Padding(0, 1).Bold(true)
+	footerStyle := p.Calendar.GetCurrentLabel().Color.ToStyle().Padding(0, 1).Bold(true)
 
 	headerText := p.CalendarModel.SelectedDate.Format()
 	footerText := p.Calendar.GetCurrentLabel().Name
@@ -67,10 +100,10 @@ func (p Planner) View() tea.View {
 	calendarView := p.CalendarModel.View().Content
 
 	calendarBorder := p.Style.BorderColor.ToStyle().
-		Border(lipgloss.NormalBorder(), false, true).Render(calendarView)
+		Border(lipgloss.RoundedBorder(), false, true).Render(calendarView)
 
 	notesBorder := p.Style.BorderColor.ToStyle().Padding(1, 1).
-		Border(lipgloss.NormalBorder(), false, true, true, true).Render(notesView)
+		Border(lipgloss.RoundedBorder(), false, true, true, true).Render(notesView)
 
 	complete := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -91,17 +124,33 @@ func (p Planner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+w":
 			// toggle focus between Calendar and Notes Models
+			p.ToggleFocus()
 		case "ctrl+h":
 			// Swap Calendar for previous label
+			p.UpdateLabel(false)
 		case "ctrl+j":
 			// Swap Calendar to next month
+			p.UpdateMonth(true)
 		case "ctrl+k":
 			// Swap Calendar to previous month
+			p.UpdateMonth(false)
 		case "ctrl+l":
 			// Swap Calendar for next label
+			p.UpdateLabel(true)
 		case "ctrl+c":
 			return p, tea.Quit
 		}
+	}
+
+	switch p.Focus {
+	case FocusCalendar:
+		prevDate := p.CalendarModel.SelectedDate
+		p.CalendarModel, cmd = p.CalendarModel.Update(msg)
+		if prevDate.Month != p.CalendarModel.SelectedDate.Month {
+			p.CalendarModel.UpdateGrid(p.Calendar)
+		}
+	case FocusNotes:
+		p.NotesModel, cmd = p.NotesModel.Update(msg)
 	}
 
 	return p, cmd

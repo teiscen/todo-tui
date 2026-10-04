@@ -5,8 +5,8 @@ type Calendar struct {
 	Labels Labels
 }
 
-func (c Calendar) getEntry(d Date, l LabelID) (val Entry, ok bool) {
-	val, ok = c.Months[d][l]
+func (c Calendar) GetEntry(d Date) (val Entry, ok bool) {
+	val, ok = c.Months[d][c.Labels.Selected]
 	return
 }
 

@@ -1,5 +1,7 @@
 package backend
 
+import "slices"
+
 type (
 	LabelID   string
 	LabelInfo struct {
@@ -12,6 +14,17 @@ type (
 		Order    []LabelID
 	}
 )
+
+func (l *Labels) Step(forward bool) {
+	n := len(l.Order)
+	i := slices.Index(l.Order, l.Selected)
+	if forward {
+		i++
+	} else {
+		i--
+	}
+	l.Selected = l.Order[(i+n)%n]
+}
 
 // func (m *Model) addLabel(label Label) {
 // 	m.labels = append(m.labels, label)

@@ -46,7 +46,7 @@ func (n Notes) View() tea.View {
 	return tea.NewView(n.TextArea.View())
 }
 
-func (n Notes) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (n Notes) Update(msg tea.Msg) (Notes, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {

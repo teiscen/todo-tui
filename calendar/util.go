@@ -27,3 +27,29 @@ func (c Calendar) GetSelectedColor() backend.HexCode {
 
 	return backend.HexCode("#FFFFFF")
 }
+
+func (c *Calendar) UpdateGrid(cal backend.Calendar) {
+	checkValid := func(target backend.Date) bool {
+		return target.Month == c.SelectedDate.Month
+	}
+
+	checkMarked := func(target backend.Date) bool {
+		_, ok := cal.GetEntry(target)
+		return ok
+	}
+
+	offset := int(c.SelectedDate.FirstDay().FirstDay().Weekday())
+	date := c.SelectedDate.FirstDay().FirstDay().AddDate(0, 0, -offset)
+
+	for row := range c.Grid {
+		for col := range c.Grid[row] {
+			cell := &c.Grid[row][col]
+
+			*cell = Grid{
+				Date:     date,
+				IsValid:  checkValid(date),
+				IsMarked: checkMarked(date),
+			}
+		}
+	}
+}
