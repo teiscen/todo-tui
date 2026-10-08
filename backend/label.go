@@ -15,6 +15,14 @@ type (
 	}
 )
 
+func (l Labels) GetColor() HexCode {
+	return l.Info[l.Selected].Color
+}
+
+func (l Labels) GetName() string {
+	return l.Info[l.Selected].Name
+}
+
 func (l *Labels) Step(forward bool) {
 	n := len(l.Order)
 	i := slices.Index(l.Order, l.Selected)

@@ -18,13 +18,17 @@ const (
 	FocusNotes
 )
 
+type Entries map[backend.Date]backend.Entry
+
 type Planner struct {
 	NotesModel    notes.Notes
 	CalendarModel calendar.Calendar
 	Style         PlannerStyle
 
-	Calendar backend.Calendar
-	Focus    Focus
+	Focus Focus
+
+	Entries Entries
+	Labels  backend.Labels
 }
 
 func NewPlanner(c backend.Calendar) Planner {
@@ -33,8 +37,7 @@ func NewPlanner(c backend.Calendar) Planner {
 		CalendarModel: calendar.NewCalendar(),
 		Style:         GetDefaultStyle(),
 
-		Calendar: c,
-		Focus:    FocusCalendar,
+		Focus: FocusCalendar,
 	}
 }
 
@@ -45,10 +48,10 @@ func (p Planner) Init() tea.Cmd {
 
 func (p Planner) View() tea.View {
 	headerStyle := p.CalendarModel.GetSelectedColor().ToStyle().Padding(0, 1).Bold(true)
-	footerStyle := p.Calendar.GetCurrentLabel().Color.ToStyle().Padding(0, 1).Bold(true)
+	footerStyle := p.Labels.GetColor().ToStyle().Padding(0, 1).Bold(true)
 
 	headerText := p.CalendarModel.SelectedDate.Format()
-	footerText := p.Calendar.GetCurrentLabel().Name
+	footerText := p.Labels.GetName()
 
 	headerFormatted := headerStyle.Render(headerText)
 	footerFormatted := footerStyle.Render(footerText)
@@ -90,11 +93,9 @@ func (p Planner) View() tea.View {
 	return tea.NewView(complete)
 }
 
-func (p Planner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	prevDate := p.CalendarModel.SelectedDate
-
+func (p Planner) Update(msg tea.Msg) (Planner, tea.Cmd) {
+	// prevDate := p.CalendarModel.SelectedDate
 	var cmd tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -103,18 +104,18 @@ func (p Planner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p.ToggleFocus()
 		case "ctrl+h":
 			// Swap Calendar for previous label
-			p.UpdateLabel(false)
+			cmd = p.UpdateLabel(false)
 		case "ctrl+j":
 			// Swap Calendar to next month
-			p.UpdateMonth(true)
+			cmd = p.UpdateMonth(true)
 		case "ctrl+k":
 			// Swap Calendar to previous month
-			p.UpdateMonth(false)
+			cmd = p.UpdateMonth(false)
 		case "ctrl+l":
 			// Swap Calendar for next label
-			p.UpdateLabel(true)
+			cmd = p.UpdateLabel(true)
 		case "ctrl+r":
-			p.WriteChange()
+			// cmd = p.WriteChange()
 		case "ctrl+c":
 			return p, tea.Quit
 		}
@@ -131,16 +132,17 @@ func (p Planner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Update Calendar if its a new month
 	// Update Notes value if the day changed
 	// Need to update calendar via result from x CalendarModel
-	newStr := ""
-	if newText, ok := p.Calendar.GetEntry(p.CalendarModel.SelectedDate); ok {
-		newStr = newText.Msg
-	}
-	if prevDate.Month != p.CalendarModel.SelectedDate.Month {
-		p.CalendarModel.UpdateGrid(p.Calendar)
-		p.NotesModel.ChangeValue(newStr)
-	} else if prevDate != p.CalendarModel.SelectedDate {
-		p.NotesModel.ChangeValue(newStr)
-	}
+	//
+	// newStr := ""
+	// if newText, ok := p.Calendar.GetEntry(p.CalendarModel.SelectedDate); ok {
+	// 	newStr = newText.Msg
+	// }
+	// if prevDate.Month != p.CalendarModel.SelectedDate.Month {
+	// 	p.CalendarModel.UpdateGrid(p.Calendar)
+	// 	p.NotesModel.ChangeValue(newStr)
+	// } else if prevDate != p.CalendarModel.SelectedDate {
+	// 	p.NotesModel.ChangeValue(newStr)
+	// }
 
 	return p, cmd
 }

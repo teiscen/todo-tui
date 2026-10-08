@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"os"
 
+	"todo-tui/todo"
+
 	tea "charm.land/bubbletea/v2"
 )
 
 func main() {
 	configPath := "./artifacts/config.yaml"
-	config, _ := LoadConfig(configPath)
+	// config, _ := config.LoadConfig(configPath)
 	// calendar.CalendarTestPrint()
 	// calendar.CalendarTestUpdate()
 
@@ -24,8 +26,11 @@ func main() {
 	// p := tea.NewProgram(note)
 
 	// planner := planner.TestPlanner()
-	planner := config.LoadPlannerModel()
-	p := tea.NewProgram(planner)
+	// planner := config.LoadPlannerModel()
+	// p := tea.NewProgram(planner)
+
+	todo := todo.NewTodo(configPath, nil)
+	p := tea.NewProgram(todo)
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)

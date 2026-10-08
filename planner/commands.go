@@ -1,6 +1,10 @@
 package planner
 
-import backend "todo-tui/backend"
+import (
+	backend "todo-tui/backend"
+
+	tea "charm.land/bubbletea/v2"
+)
 
 // Command:
 // Switch between the labels (updates calendar)
@@ -15,31 +19,38 @@ func (p *Planner) ToggleFocus() {
 	p.NotesModel.ToggleFocus()
 }
 
-func (p *Planner) UpdateMonth(next bool) {
+func (p *Planner) HasEntry(date backend.Date) bool {
+	_, ok := p.Entries[date]
+	return ok
+}
+
+type UpdateMonthMsg struct{ newDate backend.Date }
+
+func (p *Planner) UpdateMonth(next bool) tea.Cmd {
 	curr := p.CalendarModel.SelectedDate
 	if next {
 		p.CalendarModel.SelectedDate = curr.AddDate(0, 1, 0)
 	} else {
 		p.CalendarModel.SelectedDate = curr.AddDate(0, -1, 0)
 	}
-	p.CalendarModel.UpdateGrid(p.Calendar)
+	return func() tea.Msg { return UpdateMonthMsg{p.CalendarModel.SelectedDate} }
 }
 
-func (p *Planner) UpdateLabel(next bool) {
+type UpdateLabelMsg struct{ labelID backend.LabelID }
+
+func (p *Planner) UpdateLabel(next bool) tea.Cmd {
 	if next {
-		p.Calendar.Labels.Step(true)
+		p.Labels.Step(true)
 	} else {
-		p.Calendar.Labels.Step(false)
+		p.Labels.Step(false)
 	}
-	p.CalendarModel.Style.ColorAccent = p.Calendar.GetCurrentLabel().Color
-	p.CalendarModel.UpdateGrid(p.Calendar)
+	return func() tea.Msg { return UpdateLabelMsg{p.Labels.Selected} }
 }
 
 func (p *Planner) WriteChange() {
-	d := p.CalendarModel.SelectedDate
-	e := backend.Entry{
-		Status: backend.Full,
-		Msg:    p.NotesModel.TextArea.Value(),
-	}
-	p.Calendar.AddEntry(d, e)
+	// d := p.CalendarModel.SelectedDate
+	// e := backend.Entry{
+	// 	Status: backend.Full,
+	// 	Msg:    p.NotesModel.TextArea.Value(),
+	// }
 }

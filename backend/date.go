@@ -1,6 +1,9 @@
 package backend
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type (
 	Year  int
@@ -68,4 +71,9 @@ func calendarDateToTime(c Date) time.Time {
 
 func (d Date) Format() string {
 	return calendarDateToTime(d).Format("January 2")
+}
+
+// If Date is the struct {Year, Month, Date int} from earlier:
+func (d Date) FormatSQL() string {
+	return fmt.Sprintf("%04d-%02d-%02d", d.Year, int(d.Month), d.Date)
 }
