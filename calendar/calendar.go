@@ -69,7 +69,6 @@ func (c Calendar) View() tea.View {
 }
 
 // hjkl - movements
-// x    - mark/unmark
 func (c Calendar) Update(msg tea.Msg) (Calendar, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
@@ -81,8 +80,6 @@ func (c Calendar) Update(msg tea.Msg) (Calendar, tea.Cmd) {
 			c.Movement(Up)
 		case "l":
 			c.Movement(Right)
-		case "x":
-			c.ToggleMark()
 		case "q", "ctrl+c":
 			return c, tea.Quit
 		}

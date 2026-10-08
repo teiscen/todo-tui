@@ -23,15 +23,3 @@ func (c *Calendar) Movement(dir direction) {
 		c.SelectedDate = c.SelectedDate.AddDate(0, 0, 1)
 	}
 }
-
-// Update changes maybe
-func (c *Calendar) ToggleMark() {
-	for row := range c.Grid {
-		for col := range c.Grid[row] {
-			cell := &c.Grid[row][col]
-			if cell.Date == c.SelectedDate {
-				cell.IsMarked = !(*cell).IsMarked
-			}
-		}
-	}
-}

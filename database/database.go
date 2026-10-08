@@ -9,11 +9,10 @@ import (
 	_ "github.com/glebarez/go-sqlite"
 )
 
-// t.db.FetchRange(start ackend.Date, lID backend.LabelID)
+// FetchGrid returns the entries for one label across the whole 6x7 grid of
+// sDate's month (leading and trailing days of neighboring months included).
 func FetchGrid(db *sql.DB, sDate backend.Date, lID backend.LabelID) (map[backend.Date]backend.Entry, error) {
-	// the 6x7 grid starts on the Sunday on or before the 1st of the month
-	start := sDate.FirstDay()
-	start = start.AddDate(0, 0, -int(start.Weekday()))
+	start := sDate.GridStart()
 	end := start.AddDate(0, 0, 41)
 
 	rows, err := db.Query(`
@@ -49,22 +48,18 @@ func FetchGrid(db *sql.DB, sDate backend.Date, lID backend.LabelID) (map[backend
 	return out, nil
 }
 
+// ConnectDB opens (or creates) the sqlite file at dbPath.
+// Use ":memory:" for an in-memory database.
 func ConnectDB(dbPath string) (*sql.DB, error) {
-	// create a connection to the sqlite db, or create one if it doesnt exist
-	// to connect to SQlit db in memory replace dbPath with :memory:
-	db, err := sql.Open("sqlite", dbPath)
+	// foreign_keys must be set per connection or ON DELETE CASCADE does nothing
+	dsn := dbPath + "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		fmt.Println(err)
-		return nil, fmt.Errorf("issue connected to db")
+		return nil, fmt.Errorf("open db: %w", err)
 	}
-
-	// fmt.Println("Connected to db succesfully")
-
-	var sqliteVersion string
-	err = db.QueryRow("select sqlite_version()").Scan(&sqliteVersion)
-	if err != nil {
-		fmt.Println(err)
-		return nil, fmt.Errorf("issue connected to db")
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("ping db: %w", err)
 	}
 	return db, nil
 }
@@ -201,6 +196,52 @@ func GetMonth(db *sql.DB, name, startDate, endDate string) (Something, error) {
 		}
 		result[date] = msg
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read date range: %w", err)
+	}
 
 	return result, nil
+}
+
+// LabelCount is used at startup to decide whether to seed the mock data.
+func LabelCount(db *sql.DB) (int, error) {
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM labels`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count labels: %w", err)
+	}
+	return n, nil
+}
+
+// PopulateFromCalendar seeds the tables from an in-memory calendar.
+// The LabelID is stored in labels.name because entries.label_name (and
+// FetchGrid) use the ID. Everything is inserted in one transaction.
+func PopulateFromCalendar(db *sql.DB, cal backend.Calendar) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer tx.Rollback()
+
+	for _, id := range cal.Labels.Order {
+		info := cal.Labels.Info[id]
+		if _, err := tx.Exec(
+			`INSERT INTO labels (name, color) VALUES (?, ?)`,
+			string(id), string(info.Color),
+		); err != nil {
+			return fmt.Errorf("insert label %q: %w", id, err)
+		}
+	}
+
+	for date, byLabel := range cal.Months {
+		for id, e := range byLabel {
+			if _, err := tx.Exec(
+				`INSERT INTO entries (date, label_name, msg) VALUES (?, ?, ?)`,
+				date.FormatSQL(), string(id), e.Msg,
+			); err != nil {
+				return fmt.Errorf("insert entry %s/%s: %w", date.FormatSQL(), id, err)
+			}
+		}
+	}
+
+	return tx.Commit()
 }

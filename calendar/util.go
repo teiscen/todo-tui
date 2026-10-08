@@ -31,8 +31,8 @@ func (c Calendar) GetSelectedColor() backend.HexCode {
 	return backend.HexCode("#FFFFFF")
 }
 
-type HasEntry interface {
-	HasEntry(backend.Date) bool
+func (c *Calendar) SetAccent(color backend.HexCode) {
+	c.Style.ColorAccent = color
 }
 
 func (c *Calendar) UpdateGrid(hasEntry func(backend.Date) bool) {
@@ -44,8 +44,7 @@ func (c *Calendar) UpdateGrid(hasEntry func(backend.Date) bool) {
 		return hasEntry(target)
 	}
 
-	offset := int(c.SelectedDate.FirstDay().FirstDay().Weekday())
-	date := c.SelectedDate.FirstDay().FirstDay().AddDate(0, 0, -offset)
+	date := c.SelectedDate.GridStart()
 
 	for row := range c.Grid {
 		for col := range c.Grid[row] {

@@ -21,19 +21,19 @@ colors:
 labels:
   selected: uni
   order: [uni, work, gym, app, vol]
-  info: 
-    uni: 
+  info:
+    uni:
       name: University
       color: "#81c8be"
-  work:
-    name: Work
-    color: "#ca9ee6"
-  gym:
-    name: Gym
-    color: "#ef9f76"
-  app:
-    name: Application
-    color: "#babbf1"
-  vol:
-    name: Volunteer
-    color: "#f2d5cf"   
+    work:
+      name: Work
+      color: "#ca9ee6"
+    gym:
+      name: Gym
+      color: "#ef9f76"
+    app:
+      name: Application
+      color: "#babbf1"
+    vol:
+      name: Volunteer
+      color: "#f2d5cf"
