@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"fmt"
@@ -53,7 +53,6 @@ func (c Config) LoadCalendarModel() calendar.Calendar {
 
 	cal := calendar.NewCalendar()
 	cal.Style = style
-	cal.UpdateGrid(c.Calendar)
 	return cal
 }
 
@@ -70,8 +69,9 @@ func (c Config) LoadNotesModel() notes.Notes {
 }
 
 func (c Config) LoadPlannerModel() planner.Planner {
-	p := planner.NewPlanner(c.Calendar)
+	p := planner.NewPlanner()
 	p.Style.BorderColor = c.Colors.Border
+	p.Labels = c.Labels
 	p.CalendarModel = c.LoadCalendarModel()
 	p.NotesModel = c.LoadNotesModel()
 	return p

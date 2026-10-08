@@ -18,37 +18,41 @@ const (
 	FocusNotes
 )
 
+type Entries map[backend.Date]backend.Entry
+
 type Planner struct {
 	NotesModel    notes.Notes
 	CalendarModel calendar.Calendar
 	Style         PlannerStyle
 
-	Calendar backend.Calendar
-	Focus    Focus
+	Focus Focus
+
+	Entries Entries
+	Labels  backend.Labels
 }
 
-func NewPlanner(c backend.Calendar) Planner {
+func NewPlanner() Planner {
 	return Planner{
 		NotesModel:    notes.NewNotes(""),
 		CalendarModel: calendar.NewCalendar(),
 		Style:         GetDefaultStyle(),
 
-		Calendar: c,
-		Focus:    FocusCalendar,
+		Focus: FocusCalendar,
 	}
 }
 
-// Make the model use the current things
+// Init asks the root to load the starting month, the same way a month change does.
 func (p Planner) Init() tea.Cmd {
-	return nil
+	d := p.CalendarModel.SelectedDate
+	return func() tea.Msg { return UpdateMonthMsg{d} }
 }
 
 func (p Planner) View() tea.View {
 	headerStyle := p.CalendarModel.GetSelectedColor().ToStyle().Padding(0, 1).Bold(true)
-	footerStyle := p.Calendar.GetCurrentLabel().Color.ToStyle().Padding(0, 1).Bold(true)
+	footerStyle := p.Labels.GetColor().ToStyle().Padding(0, 1).Bold(true)
 
 	headerText := p.CalendarModel.SelectedDate.Format()
-	footerText := p.Calendar.GetCurrentLabel().Name
+	footerText := p.Labels.GetName()
 
 	headerFormatted := headerStyle.Render(headerText)
 	footerFormatted := footerStyle.Render(footerText)
@@ -90,36 +94,36 @@ func (p Planner) View() tea.View {
 	return tea.NewView(complete)
 }
 
-func (p Planner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	prevDate := p.CalendarModel.SelectedDate
-
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+w":
-			// toggle focus between Calendar and Notes Models
+func (p Planner) Update(msg tea.Msg) (Planner, tea.Cmd) {
+	// Planner-level keys are handled here and not forwarded, otherwise the
+	// focused child also sees them (e.g. ctrl+h and ctrl+w delete text in Notes).
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "ctrl+w": // toggle focus between Calendar and Notes
 			p.ToggleFocus()
-		case "ctrl+h":
-			// Swap Calendar for previous label
-			p.UpdateLabel(false)
-		case "ctrl+j":
-			// Swap Calendar to next month
-			p.UpdateMonth(true)
-		case "ctrl+k":
-			// Swap Calendar to previous month
-			p.UpdateMonth(false)
-		case "ctrl+l":
-			// Swap Calendar for next label
-			p.UpdateLabel(true)
-		case "ctrl+r":
-			p.WriteChange()
+			return p, nil
+		case "ctrl+h": // previous label
+			return p, p.UpdateLabel(false)
+		case "ctrl+l": // next label
+			return p, p.UpdateLabel(true)
+		case "ctrl+j": // next month
+			return p, p.UpdateMonth(true)
+		case "ctrl+k": // previous month
+			return p, p.UpdateMonth(false)
+		case "ctrl+r": // save the entry
+			return p, p.SaveEntry()
+		case "x": // mark/unmark the day, only when the calendar has focus
+			if p.Focus == FocusCalendar {
+				return p, p.ToggleEntry()
+			}
 		case "ctrl+c":
 			return p, tea.Quit
 		}
 	}
 
+	prev := p.CalendarModel.SelectedDate
+
+	var cmd tea.Cmd
 	switch p.Focus {
 	case FocusCalendar:
 		p.CalendarModel, cmd = p.CalendarModel.Update(msg)
@@ -127,19 +131,15 @@ func (p Planner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.NotesModel, cmd = p.NotesModel.Update(msg)
 	}
 
-	// TODO: refactor so its not ungly
-	// Update Calendar if its a new month
-	// Update Notes value if the day changed
-	// Need to update calendar via result from x CalendarModel
-	newStr := ""
-	if newText, ok := p.Calendar.GetEntry(p.CalendarModel.SelectedDate); ok {
-		newStr = newText.Msg
-	}
-	if prevDate.Month != p.CalendarModel.SelectedDate.Month {
-		p.CalendarModel.UpdateGrid(p.Calendar)
-		p.NotesModel.ChangeValue(newStr)
-	} else if prevDate != p.CalendarModel.SelectedDate {
-		p.NotesModel.ChangeValue(newStr)
+	// The calendar moved on its own (h/j/k/l). If it left the month, ask the
+	// root to reload the grid, which also refreshes Notes. Otherwise only the
+	// selected day changed, so show that day's entry.
+	if cur := p.CalendarModel.SelectedDate; cur != prev {
+		if cur.Year != prev.Year || cur.Month != prev.Month {
+			cmd = tea.Batch(cmd, func() tea.Msg { return UpdateMonthMsg{cur} })
+		} else {
+			p.SyncNotes()
+		}
 	}
 
 	return p, cmd

@@ -2,6 +2,9 @@ package calendar
 
 import backend "todo-tui/backend"
 
+// TODO:
+// Change how this works, wether by indexing directly
+// or getting rid of the need for it
 func (c Calendar) GetSelectedColor() backend.HexCode {
 	for row := range c.Grid {
 		for col := range c.Grid[row] {
@@ -28,18 +31,20 @@ func (c Calendar) GetSelectedColor() backend.HexCode {
 	return backend.HexCode("#FFFFFF")
 }
 
-func (c *Calendar) UpdateGrid(cal backend.Calendar) {
+func (c *Calendar) SetAccent(color backend.HexCode) {
+	c.Style.ColorAccent = color
+}
+
+func (c *Calendar) UpdateGrid(hasEntry func(backend.Date) bool) {
 	checkValid := func(target backend.Date) bool {
 		return target.Month == c.SelectedDate.Month
 	}
 
 	checkMarked := func(target backend.Date) bool {
-		_, ok := cal.GetEntry(target)
-		return ok
+		return hasEntry(target)
 	}
 
-	offset := int(c.SelectedDate.FirstDay().FirstDay().Weekday())
-	date := c.SelectedDate.FirstDay().FirstDay().AddDate(0, 0, -offset)
+	date := c.SelectedDate.GridStart()
 
 	for row := range c.Grid {
 		for col := range c.Grid[row] {

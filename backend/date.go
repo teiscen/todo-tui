@@ -1,6 +1,9 @@
 package backend
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type (
 	Year  int
@@ -47,6 +50,21 @@ func (c Date) AddDate(y int, m int, d int) Date {
 	return TimeToDate(t)
 }
 
+// AddMonths moves n months from d and keeps the day of month when it exists,
+// otherwise clamps to the last day (Jan 31 + 1 month = Feb 28/29, not Mar 3).
+func (d Date) AddMonths(n int) Date {
+	target := d.FirstDay().AddDate(0, n, 0)
+	target.Date = min(d.Date, Day(target.NumDays()))
+	return target
+}
+
+// GridStart is the first cell of a 6x7 (Sunday-first) month grid: the Sunday
+// on or before the 1st of d's month.
+func (d Date) GridStart() Date {
+	first := d.FirstDay()
+	return first.AddDate(0, 0, -int(first.Weekday()))
+}
+
 func TimeToDate(t time.Time) Date {
 	y, mTemp, d := t.Date()
 	m := int(mTemp)
@@ -68,4 +86,10 @@ func calendarDateToTime(c Date) time.Time {
 
 func (d Date) Format() string {
 	return calendarDateToTime(d).Format("January 2")
+}
+
+// FormatSQL returns a zero-padded YYYY-MM-DD string, so text comparisons
+// (BETWEEN, ORDER BY) in SQLite sort chronologically.
+func (d Date) FormatSQL() string {
+	return fmt.Sprintf("%04d-%02d-%02d", d.Year, int(d.Month), d.Date)
 }
