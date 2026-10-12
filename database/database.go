@@ -9,16 +9,17 @@ import (
 	_ "github.com/glebarez/go-sqlite"
 )
 
-// FetchGrid returns the entries for one label across the whole 6x7 grid of
-// sDate's month (leading and trailing days of neighboring months included).
-func FetchGrid(db *sql.DB, sDate backend.Date, lID backend.LabelID) (map[backend.Date]backend.Entry, error) {
-	start := sDate.GridStart()
-	end := start.AddDate(0, 0, 41)
-
-	rows, err := db.Query(`
+func FetchGridEntries(
+	db *sql.DB, sDate, eDate backend.Date, labelID backend.LabelID,
+) (map[string]string, error) {
+	query := `
 		SELECT date, msg FROM entries
-		WHERE label_name = ? AND date BETWEEN ? AND ?`,
-		lID, start.FormatSQL(), end.FormatSQL())
+		WHERE label_name = ? AND date BETWEEN ? AND ?
+	`
+	rows, err := db.Query(
+		query,
+		labelID, sDate.FormatSQL(), eDate.FormatSQL(),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("fetch grid: %w", err)
 	}
@@ -28,25 +29,55 @@ func FetchGrid(db *sql.DB, sDate backend.Date, lID backend.LabelID) (map[backend
 	for rows.Next() {
 		var d, msg string
 		if err := rows.Scan(&d, &msg); err != nil {
-			return nil, fmt.Errorf("fetch grid scan: %w", err)
+			return nil, fmt.Errorf("fetch grid: %w", err)
 		}
-		msgs[d] = msg
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("fetch grid rows: %w", err)
-	}
-
-	// key by backend.Date: walk the 42 cells and look each one up
-	out := make(map[backend.Date]backend.Entry, len(msgs))
-	d := start
-	for i := 0; i < 42; i++ {
-		if msg, ok := msgs[d.FormatSQL()]; ok {
-			out[d] = backend.Entry{Status: backend.Full, Msg: msg}
+		date, err := backend.ParseSQL(d)
+		if err != nil {
+			return nil, fmt.Errorf("fetch grid %w", err)
 		}
-		d = d.AddDate(0, 0, 1)
+		msgs[date.Key()] = msg
 	}
-	return out, nil
+	return msgs, nil
 }
+
+// FetchGrid returns the entries for one label across the whole 6x7 grid of
+// sDate's month (leading and trailing days of neighboring months included).
+// func FetchGrid(db *sql.DB, sDate backend.Date, lID backend.LabelID) (map[backend.Date]backend.Entry, error) {
+// 	start := sDate.GridStart()
+// 	end := start.AddDate(0, 0, 41)
+//
+// 	rows, err := db.Query(`
+// 		SELECT date, msg FROM entries
+// 		WHERE label_name = ? AND date BETWEEN ? AND ?`,
+// 		lID, start.FormatSQL(), end.FormatSQL())
+// 	if err != nil {
+// 		return nil, fmt.Errorf("fetch grid: %w", err)
+// 	}
+// 	defer rows.Close()
+//
+// 	msgs := make(map[string]string)
+// 	for rows.Next() {
+// 		var d, msg string
+// 		if err := rows.Scan(&d, &msg); err != nil {
+// 			return nil, fmt.Errorf("fetch grid scan: %w", err)
+// 		}
+// 		msgs[d] = msg
+// 	}
+// 	if err := rows.Err(); err != nil {
+// 		return nil, fmt.Errorf("fetch grid rows: %w", err)
+// 	}
+//
+// 	// key by backend.Date: walk the 42 cells and look each one up
+// 	out := make(map[backend.Date]backend.Entry, len(msgs))
+// 	d := start
+// 	for i := 0; i < 42; i++ {
+// 		if msg, ok := msgs[d.FormatSQL()]; ok {
+// 			out[d] = backend.Entry{Status: backend.Full, Msg: msg}
+// 		}
+// 		d = d.AddDate(0, 0, 1)
+// 	}
+// 	return out, nil
+// }
 
 // ConnectDB opens (or creates) the sqlite file at dbPath.
 // Use ":memory:" for an in-memory database.

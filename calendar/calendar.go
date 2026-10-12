@@ -2,7 +2,6 @@ package calendar
 
 import (
 	"strings"
-	"time"
 
 	backend "todo-tui/backend"
 
@@ -10,21 +9,20 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-type Grid struct {
+type Info struct {
 	Date     backend.Date
-	IsValid  bool
 	IsMarked bool
 }
 
 type Calendar struct {
 	SelectedDate backend.Date
 	Style        CalendarStyle
-	Grid         [6][7]Grid
+	State        [6][7]Info
 }
 
-func NewCalendar() Calendar {
+func NewCalendar(date backend.Date) Calendar {
 	return Calendar{
-		SelectedDate: backend.TimeToDate(time.Now()),
+		SelectedDate: date,
 		Style:        GetDefaultStyle(),
 	}
 }
@@ -34,27 +32,30 @@ func (c Calendar) Init() tea.Cmd {
 }
 
 func (c Calendar) View() tea.View {
-	var out string
-
-	out = c.Style.RenderHeader()
-
-	for row := range c.Grid {
+	// Append the header
+	out := c.Style.RenderHeader()
+	var out2 string
+	// Loop through the state grid and begin rendering
+	for row := range c.State {
+		// Add the spacing between the rows
 		out += strings.Repeat("\n", c.Style.RowSpacing+1)
-
-		for col := range c.Grid[row] {
-			cell := c.Grid[row][col]
+		out2 += "\n"
+		for col := range c.State[row] {
+			// Determine if its the current month (Lowers saturation)
+			cell := c.State[row][col]
+			isValid := cell.Date.Month() == c.SelectedDate.Month()
 
 			var style lipgloss.Style
 			if cell.IsMarked {
-				style = c.Style.AccentStyle(cell.IsValid)
+				style = c.Style.AccentStyle(isValid)
 			} else if col == 0 || col == 6 {
-				style = c.Style.WeekendStyle(cell.IsValid)
+				style = c.Style.WeekendStyle(isValid)
 			} else {
-				style = c.Style.WeekdayStyle(cell.IsValid)
+				style = c.Style.WeekdayStyle(isValid)
 			}
 
 			var icon string
-			if cell.Date == c.SelectedDate {
+			if cell.Date.Equal(c.SelectedDate) {
 				icon = c.Style.CharSelected
 			} else {
 				icon = c.Style.CharIcon
@@ -70,20 +71,23 @@ func (c Calendar) View() tea.View {
 
 // hjkl - movements
 func (c Calendar) Update(msg tea.Msg) (Calendar, tea.Cmd) {
+	var cmd tea.Cmd
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "h":
-			c.Movement(Left)
+			cmd = c.Movement(Left)
 		case "j":
-			c.Movement(Down)
+			cmd = c.Movement(Down)
 		case "k":
-			c.Movement(Up)
+			cmd = c.Movement(Up)
 		case "l":
-			c.Movement(Right)
+			cmd = c.Movement(Right)
+		case "x":
+			cmd = c.ToggleMark()
 		case "q", "ctrl+c":
 			return c, tea.Quit
 		}
 	}
 
-	return c, nil
+	return c, cmd
 }

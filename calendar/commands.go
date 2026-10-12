@@ -1,5 +1,11 @@
 package calendar
 
+import (
+	backend "todo-tui/backend"
+
+	tea "charm.land/bubbletea/v2"
+)
+
 // Mark/Unmark
 // Movement
 type direction int
@@ -11,15 +17,49 @@ const (
 	Right
 )
 
-func (c *Calendar) Movement(dir direction) {
+type (
+	ChangeMonthMsg struct{ NewDate backend.Date }
+	ChangeDateMsg  struct{ NewDate backend.Date }
+	ToggleMarkMsg  struct {
+		Date   backend.Date
+		Status bool
+	}
+)
+
+func (c *Calendar) Movement(dir direction) tea.Cmd {
+	oldDate := c.SelectedDate
 	switch dir {
 	case Left:
-		c.SelectedDate = c.SelectedDate.AddDate(0, 0, -1)
+		c.SelectedDate.ChangeDate(0, 0, -1)
 	case Down:
-		c.SelectedDate = c.SelectedDate.AddDate(0, 0, 7)
+		c.SelectedDate.ChangeDate(0, 0, 7)
 	case Up:
-		c.SelectedDate = c.SelectedDate.AddDate(0, 0, -7)
+		c.SelectedDate.ChangeDate(0, 0, -7)
 	case Right:
-		c.SelectedDate = c.SelectedDate.AddDate(0, 0, 1)
+		c.SelectedDate.ChangeDate(0, 0, 1)
+	}
+
+	if oldDate.Month() != c.SelectedDate.Month() {
+		return func() tea.Msg {
+			return ChangeMonthMsg{NewDate: c.SelectedDate}
+		}
+	} else {
+		return func() tea.Msg {
+			return ChangeDateMsg{NewDate: c.SelectedDate}
+		}
+	}
+}
+
+func (c *Calendar) ToggleMark() tea.Cmd {
+	infoAddr := c.GetInfo(c.SelectedDate)
+	if infoAddr == nil {
+		return nil
+	}
+	infoAddr.IsMarked = !infoAddr.IsMarked
+	return func() tea.Msg {
+		return ToggleMarkMsg{
+			Date:   c.SelectedDate,
+			Status: infoAddr.IsMarked,
+		}
 	}
 }

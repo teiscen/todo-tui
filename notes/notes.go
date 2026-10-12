@@ -52,9 +52,12 @@ func (n Notes) Update(msg tea.Msg) (Notes, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		// case "ctrl+w":
-		// 	n.ToggleFocus()
-		// 	return n, nil
+		case "ctrl+r":
+			return n, func() tea.Msg {
+				return WriteTextMsg{
+					Text: n.TextArea.Value(),
+				}
+			}
 		case "ctrl+c":
 			return n, tea.Quit
 		}

@@ -7,3 +7,7 @@ func (n *Notes) ToggleFocus() {
 		(*n).TextArea.Focus()
 	}
 }
+
+type WriteTextMsg struct {
+	Text string
+}

@@ -1,95 +1,119 @@
 package backend
 
 import (
-	"fmt"
 	"time"
 )
 
-type (
-	Year  int
-	Month int
-	Day   int
-	Date  struct {
-		Year  Year
-		Month Month
-		Date  Day
-	}
-)
+type Date struct {
+	t time.Time
+}
 
-func (c Date) Weekday() time.Weekday {
-	tDate := calendarDateToTime(c)
-	return tDate.Weekday()
+func NewDate(t time.Time) Date {
+	return Date{t: t}
+}
+
+func (c Date) Year() int {
+	return c.t.Year()
+}
+
+func (c Date) Month() int {
+	return int(c.t.Month())
+}
+
+func (c Date) Day() int {
+	return c.t.Day()
+}
+
+func (c Date) Location() *time.Location {
+	return c.t.Location()
+}
+
+func (c Date) Weekday() int {
+	return int(c.t.Weekday())
 }
 
 func (c Date) NumDays() int {
-	numDays := int(c.LastDay().Date)
-	return numDays
+	c.LastDay()
+	return c.t.Day()
 }
 
-func (c Date) LastDay() Date {
-	y := int(c.Year)
-	m := time.Month(c.Month + 1)
-	d := 0
-	locn := time.Now().Location()
-	inTime := time.Date(y, m, d, 0, 0, 0, 0, locn)
-	return TimeToDate(inTime)
+func (c *Date) LastDay() {
+	c.t = time.Date(
+		c.Year(), time.Month(c.Month()+1), 0,
+		0, 0, 0, 0, c.Location(),
+	)
 }
 
-func (c Date) FirstDay() Date {
-	y := int(c.Year)
-	m := time.Month(c.Month)
-	d := 1
-	locn := time.Now().Location()
-	inTime := time.Date(y, m, d, 0, 0, 0, 0, locn)
-	return TimeToDate(inTime)
+func (c *Date) FirstDay() {
+	c.t = time.Date(
+		c.Year(), time.Month(c.Month()), 1,
+		0, 0, 0, 0, c.Location(),
+	)
 }
 
-func (c Date) AddDate(y int, m int, d int) Date {
-	t := calendarDateToTime(c)
-	t = t.AddDate(y, m, d)
-	return TimeToDate(t)
+func (c *Date) ChangeDate(y, m, d int) {
+	c.t = c.t.AddDate(y, m, d)
 }
 
-// AddMonths moves n months from d and keeps the day of month when it exists,
-// otherwise clamps to the last day (Jan 31 + 1 month = Feb 28/29, not Mar 3).
-func (d Date) AddMonths(n int) Date {
-	target := d.FirstDay().AddDate(0, n, 0)
-	target.Date = min(d.Date, Day(target.NumDays()))
-	return target
+func (c Date) AddDate(y, m, d int) Date {
+	c.ChangeDate(y, m, d)
+	return c
 }
 
-// GridStart is the first cell of a 6x7 (Sunday-first) month grid: the Sunday
-// on or before the 1st of d's month.
-func (d Date) GridStart() Date {
-	first := d.FirstDay()
-	return first.AddDate(0, 0, -int(first.Weekday()))
-}
-
-func TimeToDate(t time.Time) Date {
-	y, mTemp, d := t.Date()
-	m := int(mTemp)
-
-	return Date{
-		Year:  Year(y),
-		Month: Month(m),
-		Date:  Day(d),
-	}
-}
-
-func calendarDateToTime(c Date) time.Time {
-	y := int(c.Year)
-	m := time.Month(c.Month)
-	d := int(c.Date)
-	locn := time.Now().Location()
-	return time.Date(y, m, d, 0, 0, 0, 0, locn)
-}
-
-func (d Date) Format() string {
-	return calendarDateToTime(d).Format("January 2")
+func (c Date) Format() string {
+	return c.t.Format("January 2")
 }
 
 // FormatSQL returns a zero-padded YYYY-MM-DD string, so text comparisons
 // (BETWEEN, ORDER BY) in SQLite sort chronologically.
-func (d Date) FormatSQL() string {
-	return fmt.Sprintf("%04d-%02d-%02d", d.Year, int(d.Month), d.Date)
+func (c Date) FormatSQL() string {
+	return c.t.Format("2006-01-02")
+}
+
+// Key returns a timezone-independent key for map lookups (YYYY-MM-DD).
+func (c Date) Key() string {
+	return c.t.Format("2006-01-02")
+}
+
+// Equal reports whether c and other represent the same calendar date (ignores timezone).
+func (c Date) Equal(other Date) bool {
+	return c.Year() == other.Year() && c.Month() == other.Month() && c.Day() == other.Day()
+}
+
+// Compare returns -1 if c < other, 0 if equal, 1 if c > other (date-only).
+func (c Date) Compare(other Date) int {
+	if c.Year() != other.Year() {
+		if c.Year() < other.Year() {
+			return -1
+		}
+		return 1
+	}
+	if c.Month() != other.Month() {
+		if c.Month() < other.Month() {
+			return -1
+		}
+		return 1
+	}
+	if c.Day() != other.Day() {
+		if c.Day() < other.Day() {
+			return -1
+		}
+		return 1
+	}
+	return 0
+}
+
+// Before reports whether c is before other (date-only).
+func (c Date) Before(other Date) bool {
+	return c.Compare(other) < 0
+}
+
+// After reports whether c is after other (date-only).
+func (c Date) After(other Date) bool {
+	return c.Compare(other) > 0
+}
+
+func ParseSQL(str string) (Date, error) {
+	t, err := time.Parse("2006-01-02", str)
+	return Date{t: t}, err
 }

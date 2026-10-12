@@ -86,13 +86,13 @@ func MockCalendar() backend.Calendar {
 	}
 	volPartial := []string{"Helped for an hour", "Left early"}
 
-	start := backend.Date{Year: 2026, Month: 9, Date: 1}
+	start := backend.NewDate(time.Date(2026, time.Month(9), 1, 0, 0, 0, 0, time.UTC))
 	// Sep (30) + Oct (31) + Nov (30) = 91 days.
 	for i := 0; i < 91; i++ {
 		d := start.AddDate(0, 0, i)
 		wd := d.Weekday()
-		isWeekday := wd >= time.Monday && wd <= time.Friday
-		examSeason := d.Month == 11 && d.Date >= 17
+		isWeekday := wd >= int(time.Monday) && wd <= int(time.Friday)
+		examSeason := d.Month() == 11 && d.Day() >= 17
 
 		// University: weekdays, with the odd light Sunday study session.
 		switch {
@@ -104,19 +104,19 @@ func MockCalendar() backend.Calendar {
 			} else {
 				set(d, "uni", s, pick(uniMsgs))
 			}
-		case wd == time.Sunday && rng.Float64() < 0.4:
+		case wd == int(time.Sunday) && rng.Float64() < 0.4:
 			set(d, "uni", backend.Partial, "Light study session")
 		}
 
 		// Work: Tue/Thu evenings, Saturday day shift.
 		switch wd {
-		case time.Tuesday, time.Thursday:
+		case int(time.Tuesday), int(time.Thursday):
 			if s := roll(0.1); s == backend.Partial {
 				set(d, "work", s, "Left early")
 			} else {
 				set(d, "work", s, "Evening shift 4pm-10pm")
 			}
-		case time.Saturday:
+		case int(time.Saturday):
 			if s := roll(0.1); s == backend.Partial {
 				set(d, "work", s, "Left early")
 			} else {
@@ -125,7 +125,7 @@ func MockCalendar() backend.Calendar {
 		}
 
 		// Gym: Mon/Wed/Fri/Sun, ~20% of sessions skipped entirely.
-		if msg, ok := gymByDay[wd]; ok && rng.Float64() > 0.2 {
+		if msg, ok := gymByDay[time.Weekday(wd)]; ok && rng.Float64() > 0.2 {
 			if s := roll(0.15); s == backend.Partial {
 				set(d, "gym", s, pick(gymPartial))
 			} else {
@@ -143,7 +143,7 @@ func MockCalendar() backend.Calendar {
 		}
 
 		// Volunteering: most Sundays.
-		if wd == time.Sunday && rng.Float64() < 0.6 {
+		if wd == int(time.Sunday) && rng.Float64() < 0.6 {
 			if s := roll(0.15); s == backend.Partial {
 				set(d, "vol", s, pick(volPartial))
 			} else {

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"todo-tui/backend"
 	"todo-tui/calendar"
@@ -51,7 +52,8 @@ func (c Config) LoadCalendarModel() calendar.Calendar {
 	currLabel := c.Labels.Selected
 	style.ColorAccent = c.Labels.Info[currLabel].Color
 
-	cal := calendar.NewCalendar()
+	// Use a fixed date in the mock data range (Oct 2026)
+	cal := calendar.NewCalendar(backend.NewDate(time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)))
 	cal.Style = style
 	return cal
 }
@@ -69,10 +71,12 @@ func (c Config) LoadNotesModel() notes.Notes {
 }
 
 func (c Config) LoadPlannerModel() planner.Planner {
-	p := planner.NewPlanner()
+	// Use a fixed date in the mock data range (Oct 2026)
+	p := planner.NewPlanner(backend.NewDate(time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)))
 	p.Style.BorderColor = c.Colors.Border
 	p.Labels = c.Labels
 	p.CalendarModel = c.LoadCalendarModel()
 	p.NotesModel = c.LoadNotesModel()
+	p.ApplyLabelColor()
 	return p
 }

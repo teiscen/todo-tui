@@ -18,7 +18,7 @@ const (
 	FocusNotes
 )
 
-type Entries map[backend.Date]backend.Entry
+type Entries map[string]string
 
 type Planner struct {
 	NotesModel    notes.Notes
@@ -31,10 +31,10 @@ type Planner struct {
 	Labels  backend.Labels
 }
 
-func NewPlanner() Planner {
+func NewPlanner(date backend.Date) Planner {
 	return Planner{
 		NotesModel:    notes.NewNotes(""),
-		CalendarModel: calendar.NewCalendar(),
+		CalendarModel: calendar.NewCalendar(date),
 		Style:         GetDefaultStyle(),
 
 		Focus: FocusCalendar,
@@ -43,45 +43,65 @@ func NewPlanner() Planner {
 
 // Init asks the root to load the starting month, the same way a month change does.
 func (p Planner) Init() tea.Cmd {
-	d := p.CalendarModel.SelectedDate
-	return func() tea.Msg { return UpdateMonthMsg{d} }
+	// d := p.CalendarModel.SelectedDate
+	// return func() tea.Msg { return UpdateMonthMsg{d} }
+	return nil
 }
 
 func (p Planner) View() tea.View {
-	headerStyle := p.CalendarModel.GetSelectedColor().ToStyle().Padding(0, 1).Bold(true)
-	footerStyle := p.Labels.GetColor().ToStyle().Padding(0, 1).Bold(true)
-
-	headerText := p.CalendarModel.SelectedDate.Format()
-	footerText := p.Labels.GetName()
-
-	headerFormatted := headerStyle.Render(headerText)
-	footerFormatted := footerStyle.Render(footerText)
-
+	type posn int
+	const (
+		top posn = iota
+		mid
+		bot
+	)
 	width := 30
-	padding := func(str string) (left, right string) {
-		pad := strings.Repeat("─", max(0, (width-lipgloss.Width(str))/2))
-		if lipgloss.Width(str)%2 == 1 {
-			right = "─"
+	genBreak := func(text string, style lipgloss.Style, posn posn) string {
+		text = style.Render(text)
+
+		var paddingL, paddingR, left, right string
+		pad := strings.Repeat("─", max(0, (width-lipgloss.Width(text))/2))
+		if lipgloss.Width(text)%2 == 1 {
+			paddingR = "─"
 		}
-		left += pad
-		right += pad
-		return
+		paddingL += pad
+		paddingR += pad
+
+		switch posn {
+		case top:
+			left = "╭" + paddingL
+			right = paddingR + "╮"
+		case mid:
+			left = "├" + paddingL
+			right = paddingR + "┤"
+		case bot:
+			left = "╰" + paddingL
+			right = paddingR + "╯"
+		}
+
+		borderStyle := p.Style.BorderColor.ToStyle()
+		return borderStyle.Render(left) + text + borderStyle.Render(right)
 	}
 
-	headerPaddingL, headerPaddingR := padding(headerFormatted)
-	footerPaddingL, footerPaddingR := padding(footerFormatted)
-
-	headerFull := "╭" + headerPaddingL + headerFormatted + headerPaddingR + "╮"
-	footerFull := "├" + footerPaddingL + footerFormatted + footerPaddingR + "┤"
-
-	notesView := p.NotesModel.View().Content
-	calendarView := p.CalendarModel.View().Content
+	headerFull := genBreak(
+		p.CalendarModel.SelectedDate.Format(),
+		p.CalendarModel.GetSelectedColor().ToStyle().Padding(0, 1).Bold(true),
+		top,
+	)
 
 	calendarBorder := p.Style.BorderColor.ToStyle().
-		Border(lipgloss.RoundedBorder(), false, true).Render(calendarView)
+		Border(lipgloss.RoundedBorder(), false, true).
+		Render(p.CalendarModel.View().Content)
+
+	footerFull := genBreak(
+		p.Labels.GetName(),
+		p.Labels.GetColor().ToStyle().Padding(0, 1).Bold(true),
+		mid,
+	)
 
 	notesBorder := p.Style.BorderColor.ToStyle().Padding(1, 1).
-		Border(lipgloss.RoundedBorder(), false, true, true, true).Render(notesView)
+		Border(lipgloss.RoundedBorder(), false, true, true, true).
+		Render(p.NotesModel.View().Content)
 
 	complete := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -94,9 +114,11 @@ func (p Planner) View() tea.View {
 	return tea.NewView(complete)
 }
 
+// Handle on inputs:
+// ctrl h/j/k/l and r
+// Then delegate to the submodels (planner/notes)
+// Read the output and determine if actions are needed
 func (p Planner) Update(msg tea.Msg) (Planner, tea.Cmd) {
-	// Planner-level keys are handled here and not forwarded, otherwise the
-	// focused child also sees them (e.g. ctrl+h and ctrl+w delete text in Notes).
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "ctrl+w": // toggle focus between Calendar and Notes
@@ -110,20 +132,18 @@ func (p Planner) Update(msg tea.Msg) (Planner, tea.Cmd) {
 			return p, p.UpdateMonth(true)
 		case "ctrl+k": // previous month
 			return p, p.UpdateMonth(false)
-		case "ctrl+r": // save the entry
-			return p, p.SaveEntry()
-		case "x": // mark/unmark the day, only when the calendar has focus
-			if p.Focus == FocusCalendar {
-				return p, p.ToggleEntry()
-			}
+		// case "ctrl+r": // save the entry
+		// 	return p, p.SaveEntry()
+		// case "x": // mark/unmark the day, only when the calendar has focus
+		// if p.Focus == FocusCalendar {
+		// 	return p, p.ToggleEntry()
+		// }
 		case "ctrl+c":
 			return p, tea.Quit
 		}
 	}
 
-	prev := p.CalendarModel.SelectedDate
-
-	var cmd tea.Cmd
+	var cmd tea.Cmd // initializes to nil
 	switch p.Focus {
 	case FocusCalendar:
 		p.CalendarModel, cmd = p.CalendarModel.Update(msg)
@@ -131,16 +151,53 @@ func (p Planner) Update(msg tea.Msg) (Planner, tea.Cmd) {
 		p.NotesModel, cmd = p.NotesModel.Update(msg)
 	}
 
+	// Capture the changes returned by notes or calendar model
+	switch m := msg.(type) {
+	case calendar.ChangeMonthMsg:
+		return p, func() tea.Msg {
+			p.SyncNotes()
+			return ChangeCalendarMsg{
+				*p.SelectedLabel(),
+				*p.SelectedDate(),
+			}
+		}
+	case calendar.ChangeDateMsg:
+		p.SyncNotes()
+	case calendar.ToggleMarkMsg:
+		if m.Status {
+			return p, func() tea.Msg {
+				return SaveEntryMsg{
+					Date:  *p.SelectedDate(),
+					Label: *p.SelectedLabel(),
+					Msg:   p.NotesModel.TextArea.Value(),
+				}
+			}
+		} else {
+			return p, func() tea.Msg {
+				return RemoveEntryMsg{
+					Date:  *p.SelectedDate(),
+					Label: *p.SelectedLabel(),
+				}
+			}
+		}
+	case notes.WriteTextMsg:
+		return p, func() tea.Msg {
+			return SaveEntryMsg{
+				Date:  *p.SelectedDate(),
+				Label: *p.SelectedLabel(),
+				Msg:   p.NotesModel.TextArea.Value(),
+			}
+		}
+	}
+	return p, cmd
+
 	// The calendar moved on its own (h/j/k/l). If it left the month, ask the
 	// root to reload the grid, which also refreshes Notes. Otherwise only the
 	// selected day changed, so show that day's entry.
-	if cur := p.CalendarModel.SelectedDate; cur != prev {
-		if cur.Year != prev.Year || cur.Month != prev.Month {
-			cmd = tea.Batch(cmd, func() tea.Msg { return UpdateMonthMsg{cur} })
-		} else {
-			p.SyncNotes()
-		}
-	}
-
-	return p, cmd
+	// if cur := p.CalendarModel.SelectedDate; cur != prev {
+	// 	if cur.Year != prev.Year || cur.Month != prev.Month {
+	// 		cmd = tea.Batch(cmd, func() tea.Msg { return UpdateMonthMsg{cur} })
+	// 	} else {
+	// 		p.SyncNotes()
+	// 	}
 }
