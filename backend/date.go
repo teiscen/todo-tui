@@ -8,8 +8,19 @@ type Date struct {
 	t time.Time
 }
 
+func (d Date) GetTime() time.Time {
+	return d.t
+}
+
 func NewDate(t time.Time) Date {
 	return Date{t: t}
+}
+
+func (d Date) IsWeekend() bool {
+	if d.Weekday() == 0 || d.Weekday() == 6 {
+		return true
+	}
+	return false
 }
 
 func (c Date) Year() int {
@@ -111,6 +122,13 @@ func (c Date) Before(other Date) bool {
 // After reports whether c is after other (date-only).
 func (c Date) After(other Date) bool {
 	return c.Compare(other) > 0
+}
+
+// DaysUntil returns the number of days from c to other (positive if other is in the future).
+func (c Date) DaysUntil(other Date) int {
+	cMid := time.Date(c.Year(), time.Month(c.Month()), c.Day(), 0, 0, 0, 0, time.UTC)
+	oMid := time.Date(other.Year(), time.Month(other.Month()), other.Day(), 0, 0, 0, 0, time.UTC)
+	return int(oMid.Sub(cMid).Hours() / 24)
 }
 
 func ParseSQL(str string) (Date, error) {

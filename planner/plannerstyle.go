@@ -10,6 +10,6 @@ type PlannerStyle struct {
 
 func GetDefaultStyle() PlannerStyle {
 	return PlannerStyle{
-		BorderColor: backend.HexCode("#C6D0F5"),
+		BorderColor: backend.HexCode("#c6d0f5"),
 	}
 }

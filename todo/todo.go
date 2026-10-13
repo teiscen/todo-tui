@@ -4,15 +4,24 @@ import (
 	"database/sql"
 
 	"todo-tui/config"
+	"todo-tui/leftbox"
 	"todo-tui/planner"
+	"todo-tui/preview"
+	"todo-tui/weekly"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 type Todo struct {
-	db           *sql.DB
-	cfg          config.Config
+	db  *sql.DB
+	cfg config.Config
+
 	plannerModel planner.Planner
+
+	leftboxModel leftbox.Leftbox
+	weeklyModel  weekly.Weekly
+	previewModel preview.Preview
 
 	Style TodoStyle
 
@@ -24,6 +33,9 @@ func NewTodo(cfg config.Config, db *sql.DB) *Todo {
 		db:           db,
 		cfg:          cfg,
 		plannerModel: cfg.LoadPlannerModel(),
+		leftboxModel: cfg.LoadLeftboxModel(),
+		weeklyModel:  cfg.LoadWeeklyModel(),
+		previewModel: cfg.LoadPreviewModel(),
 	}
 }
 
@@ -38,7 +50,18 @@ func (t *Todo) Init() tea.Cmd {
 }
 
 func (t *Todo) View() tea.View {
-	return t.plannerModel.View()
+	left := t.leftboxModel.View().Content
+	middle := lipgloss.JoinVertical(
+		lipgloss.Left,
+		t.previewModel.View().Content,
+		t.weeklyModel.View().Content,
+	)
+	right := t.plannerModel.View().Content
+	combined := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		left, middle, right,
+	)
+	return tea.NewView(combined)
 }
 
 func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

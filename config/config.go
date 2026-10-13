@@ -7,8 +7,11 @@ import (
 
 	"todo-tui/backend"
 	"todo-tui/calendar"
+	"todo-tui/leftbox"
 	"todo-tui/notes"
 	"todo-tui/planner"
+	"todo-tui/preview"
+	"todo-tui/weekly"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -24,8 +27,8 @@ type Config struct {
 		Weekday backend.HexCode `yaml:"weekday"`
 		Weekend backend.HexCode `yaml:"weekend"`
 	} `yaml:"colors"`
-	Labels   backend.Labels   `yaml:"labels"`
-	Calendar backend.Calendar `yaml:"-"`
+	Labels backend.Labels `yaml:"labels"`
+	// Calendar backend.Calendar `yaml:"-"`
 }
 
 func LoadConfig(filePath string) (Config, error) {
@@ -40,8 +43,8 @@ func LoadConfig(filePath string) (Config, error) {
 		return config, fmt.Errorf("parse config: %w", err)
 	}
 
-	config.Calendar = MockCalendar()
-	config.Calendar.Labels.Selected = config.Labels.Selected
+	// config.Calendar = MockCalendar()
+	// config.Calendar.Labels.Selected = config.Labels.Selected
 	return config, nil
 }
 
@@ -79,4 +82,19 @@ func (c Config) LoadPlannerModel() planner.Planner {
 	p.NotesModel = c.LoadNotesModel()
 	p.ApplyLabelColor()
 	return p
+}
+
+func (c Config) LoadLeftboxModel() leftbox.Leftbox {
+	l := leftbox.NewLeftbox()
+	return l
+}
+
+func (c Config) LoadPreviewModel() preview.Preview {
+	p := preview.NewPreview()
+	return p
+}
+
+func (c Config) LoadWeeklyModel() weekly.Weekly {
+	w := weekly.NewWeekly()
+	return w
 }

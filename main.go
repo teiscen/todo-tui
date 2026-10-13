@@ -30,23 +30,20 @@ func run() error {
 	}
 	defer db.Close()
 
-	if _, err := database.CreateTableLabel(db); err != nil {
-		return fmt.Errorf("create labels table: %w", err)
-	}
-	if _, err := database.CreateTableEntries(db); err != nil {
-		return fmt.Errorf("create entries table: %w", err)
+	if err := database.CreateTables(db); err != nil {
+		return fmt.Errorf("create tables: %w", err)
 	}
 
 	// Seed with the mock calendar until entries can be created in the app.
-	n, err := database.LabelCount(db)
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		if err := database.PopulateFromCalendar(db, cfg.Calendar); err != nil {
-			return err
-		}
-	}
+	// n, err := database.LabelCount(db)
+	// if err != nil {
+	// 	return err
+	// }
+	// if n == 0 {
+	// 	if err := database.PopulateFromCalendar(db, cfg.Calendar); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	_, err = tea.NewProgram(todo.NewTodo(cfg, db)).Run()
 	return err
