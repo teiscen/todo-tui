@@ -50,7 +50,7 @@ func (l Leftbox) View() tea.View {
 	contentW := s.Width - 4   // border + 1 column of padding on each side
 	header := append([]string{l.tabBar()}, l.filterLines(contentW)...)
 	header = append(header, "")
-	footer := []string{s.ColorDim.ToStyle().Render("j/k move · space complete · f filter"), s.ColorDim.ToStyle().Render("enter collapse group · e expand task · [/] tabs")}
+	footer := []string{s.ColorDim.ToStyle().Render("j/k move · space complete · f filter"), s.ColorDim.ToStyle().Render("enter collapse group · e expand steps · [/] tabs")}
 	bodyH := s.Height - 2 - len(header) - len(footer)
 
 	vis := visible(l.Rows, l.Tab, l.Filter)
