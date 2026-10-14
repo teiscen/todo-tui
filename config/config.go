@@ -11,7 +11,6 @@ import (
 	"todo-tui/notes"
 	"todo-tui/planner"
 	"todo-tui/preview"
-	"todo-tui/weekly"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -92,9 +91,4 @@ func (c Config) LoadLeftboxModel() leftbox.Leftbox {
 func (c Config) LoadPreviewModel() preview.Preview {
 	p := preview.NewPreview()
 	return p
-}
-
-func (c Config) LoadWeeklyModel() weekly.Weekly {
-	w := weekly.NewWeekly()
-	return w
 }

@@ -23,6 +23,11 @@ func (l Labels) GetName() string {
 	return l.Info[l.Selected].Name
 }
 
+func (l Labels) GetAdjacent(forward bool) LabelID {
+	l.Step(forward)
+	return l.Selected
+}
+
 func (l *Labels) Step(forward bool) {
 	n := len(l.Order)
 	if n == 0 {

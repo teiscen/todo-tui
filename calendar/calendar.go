@@ -34,12 +34,10 @@ func (c Calendar) Init() tea.Cmd {
 func (c Calendar) View() tea.View {
 	// Append the header
 	out := c.Style.RenderHeader()
-	var out2 string
 	// Loop through the state grid and begin rendering
 	for row := range c.State {
 		// Add the spacing between the rows
 		out += strings.Repeat("\n", c.Style.RowSpacing+1)
-		out2 += "\n"
 		for col := range c.State[row] {
 			// Determine if its the current month (Lowers saturation)
 			cell := c.State[row][col]
@@ -65,7 +63,7 @@ func (c Calendar) View() tea.View {
 		}
 	}
 
-	cal := lipgloss.NewStyle().Padding(1, 1).Render(out)
+	cal := lipgloss.NewStyle().Padding(1, 0).Render(out)
 	return tea.NewView(cal)
 }
 

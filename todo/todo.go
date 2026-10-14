@@ -7,7 +7,6 @@ import (
 	"todo-tui/leftbox"
 	"todo-tui/planner"
 	"todo-tui/preview"
-	"todo-tui/weekly"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -20,7 +19,6 @@ type Todo struct {
 	plannerModel planner.Planner
 
 	leftboxModel leftbox.Leftbox
-	weeklyModel  weekly.Weekly
 	previewModel preview.Preview
 
 	Style TodoStyle
@@ -34,13 +32,11 @@ func NewTodo(cfg config.Config, db *sql.DB) *Todo {
 		cfg:          cfg,
 		plannerModel: cfg.LoadPlannerModel(),
 		leftboxModel: cfg.LoadLeftboxModel(),
-		weeklyModel:  cfg.LoadWeeklyModel(),
 		previewModel: cfg.LoadPreviewModel(),
 	}
 }
 
 func (t *Todo) Init() tea.Cmd {
-	t.LoadWeeklyData(*t.plannerModel.SelectedDate())
 	return func() tea.Msg {
 		return planner.ChangeCalendarMsg{
 			LabelID: *t.plannerModel.SelectedLabel(),
@@ -54,7 +50,6 @@ func (t *Todo) View() tea.View {
 	middle := lipgloss.JoinVertical(
 		lipgloss.Left,
 		t.previewModel.View().Content,
-		t.weeklyModel.View().Content,
 	)
 	right := t.plannerModel.View().Content
 	combined := lipgloss.JoinHorizontal(
@@ -70,7 +65,6 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l := m.LabelID
 		d := m.NewDate
 		t.ReloadPlannerState(l, d)
-		t.LoadWeeklyData(d)
 		return t, nil
 	case planner.SaveEntryMsg:
 		l := m.Label

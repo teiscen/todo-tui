@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	HEIGHT = 23
-	WIDTH  = 28
+	HEIGHT = 25
+	WIDTH  = 26
 )
 
 type Notes struct {

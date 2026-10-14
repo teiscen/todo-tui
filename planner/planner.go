@@ -55,7 +55,7 @@ func (p Planner) View() tea.View {
 		mid
 		bot
 	)
-	width := 30
+	width := 28
 	genBreak := func(text string, style lipgloss.Style, posn posn) string {
 		text = style.Render(text)
 
