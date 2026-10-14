@@ -33,7 +33,9 @@ func NewTodo(cfg config.Config, db *sql.DB) *Todo {
 		leftboxModel: cfg.LoadLeftboxModel(),
 		previewModel: cfg.LoadPreviewModel(),
 	}
-	t.previewModel.SetRows(t.leftboxModel.Rows)
+	if row, ok := t.leftboxModel.Selected(); ok {
+		t.previewModel.SetTask(row, true)
+	}
 	return t
 }
 
@@ -51,11 +53,26 @@ func (t *Todo) View() tea.View {
 	middle := t.previewModel.View().Content
 	right := t.plannerModel.View().Content
 	combined := lipgloss.JoinHorizontal(lipgloss.Top, left, middle, right)
-	return tea.NewView(combined)
+	view := tea.NewView(combined)
+	view.MouseMode = tea.MouseModeAllMotion
+	return view
 }
 
 func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
+	case tea.MouseMotionMsg:
+		mouse := m.Mouse()
+		if mouse.X < t.leftboxModel.Style.Width && t.leftboxModel.HoverAt(mouse.Y) {
+			if row, ok := t.leftboxModel.Selected(); ok {
+				t.previewModel.SetTask(row, true)
+			}
+		}
+		return t, nil
+	case leftbox.SelectTodoMsg:
+		if row, ok := t.leftboxModel.Selected(); ok {
+			t.previewModel.SetTask(row, true)
+		}
+		return t, nil
 	case planner.ChangeCalendarMsg:
 		t.ReloadPlannerState(m.LabelID, m.NewDate)
 		return t, nil
@@ -67,6 +84,20 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.RemoveEntry(m.Label, m.Date)
 		t.ReloadPlannerState(m.Label, m.Date)
 		return t, nil
+	}
+
+	if key, ok := msg.(tea.KeyPressMsg); ok {
+		switch key.String() {
+		case "j", "down", "k", "up", "[", "]", "f":
+			var cmd tea.Cmd
+			t.leftboxModel, cmd = t.leftboxModel.Update(msg)
+			if row, ok := t.leftboxModel.Selected(); ok {
+				t.previewModel.SetTask(row, true)
+			} else {
+				t.previewModel.SetTask(leftbox.Row{}, false)
+			}
+			return t, cmd
+		}
 	}
 
 	var cmd tea.Cmd
