@@ -1,7 +1,7 @@
 package preview
 
 import (
-	"sort"
+	"fmt"
 	"strings"
 
 	"todo-tui/backend"
@@ -9,25 +9,21 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 )
 
 type Preview struct {
-	Style   PreviewStyle
-	Rows    []leftbox.Row
-	Entries map[string]string
+	Style    PreviewStyle
+	Selected leftbox.Row
+	HasTask  bool
 }
 
 func NewPreview() Preview {
 	return Preview{Style: GetDefaultStyle()}
 }
 
-func (p *Preview) SetRows(rows []leftbox.Row) {
-	p.Rows = rows
-}
-
-func (p *Preview) SetEntries(entries map[string]string) {
-	p.Entries = entries
+func (p *Preview) SetTask(row leftbox.Row, ok bool) {
+	p.Selected = row
+	p.HasTask = ok
 }
 
 func (p Preview) Init() tea.Cmd { return nil }
@@ -36,56 +32,75 @@ func (p Preview) View() tea.View {
 	const width = 50
 	const height = 43
 	innerWidth := width - 4
+	border := p.Style.BorderColor.ToStyle()
 
 	var lines []string
-	lines = append(lines, p.Style.BorderColor.ToStyle().Bold(true).Render("UPCOMING"))
-	lines = append(lines, "")
+	if !p.HasTask {
+		lines = []string{
+			border.Bold(true).Render("TASK DETAILS"),
+			"",
+			"  Select a task on the left",
+			"  to inspect its details.",
+		}
+	} else {
+		r := p.Selected
+		lines = append(lines, border.Bold(true).Render("TASK DETAILS"), "")
+		lines = append(lines, border.Render("TITLE"))
+		lines = append(lines, wrapText(r.Title, innerWidth))
+		lines = append(lines, "")
 
-	count := 0
-	for _, row := range p.Rows {
-		if row.Done || (row.Group != leftbox.GroupToday && row.Group != leftbox.GroupWeek) {
-			continue
+		lines = append(lines, border.Render("STATUS"))
+		status := "Open"
+		if r.Done {
+			status = "Completed"
 		}
-		title := ansi.Truncate(row.Title, 27, "…")
-		label := strings.TrimSpace(string(row.LabelID))
-		due := row.Due
-		line := "  ○ " + title
-		if due != "" {
-			line = ansi.Truncate(line, 29, "…")
-			line += "  " + due
+		lines = append(lines, "  "+status, "")
+
+		lines = append(lines, border.Render("LABEL"))
+		label := "Unlabelled"
+		if r.LabelID != "" {
+			label = string(r.LabelID)
 		}
-		if label != "" {
-			line += "  " + label
+		if r.Color != "" {
+			label = r.Color.ToStyle().Bold(true).Render("  " + label)
+		} else {
+			label = "  " + label
 		}
-		lines = append(lines, ansi.Truncate(line, innerWidth, "…"))
-		count++
-	}
-	if count == 0 {
-		lines = append(lines, "  No upcoming tasks")
+		lines = append(lines, label, "")
+
+		lines = append(lines, border.Render("SCHEDULE / DUE DATE"))
+		if r.Schedule != "" {
+			lines = append(lines, "  "+r.Schedule)
+		}
+		if r.Due != "" {
+			dueStyle := backend.HexCode("#939AB7").ToStyle()
+			if r.DueTone == leftbox.ToneLate {
+				dueStyle = backend.HexCode("#E78284").ToStyle()
+			} else if r.DueTone == leftbox.ToneSoon {
+				dueStyle = backend.HexCode("#E5C890").ToStyle()
+			}
+			lines = append(lines, dueStyle.Render("  "+r.Due))
+		}
+		if r.Schedule == "" && r.Due == "" {
+			lines = append(lines, "  No schedule or due date")
+		}
+		lines = append(lines, "")
+
+		if r.StepsTotal > 0 {
+			lines = append(lines, border.Render("PROGRESS"))
+			lines = append(lines, fmt.Sprintf("  %d of %d steps completed", r.StepsDone, r.StepsTotal))
+			filled := barFill(r.StepsDone, r.StepsTotal, 20)
+			lines = append(lines, "  "+backend.HexCode("#CA9EE6").ToStyle().Render(strings.Repeat("━", filled))+backend.HexCode("#939AB7").ToStyle().Render(strings.Repeat("─", 20-filled)))
+			lines = append(lines, "")
+		}
+
+		lines = append(lines, border.Render("TASK ID"))
+		lines = append(lines, fmt.Sprintf("  #%d", r.ID))
 	}
 
-	lines = append(lines, "", p.Style.BorderColor.ToStyle().Bold(true).Render("CALENDAR ENTRIES"), "")
-	keys := make([]string, 0, len(p.Entries))
-	for key := range p.Entries {
-		keys = append(keys, key)
+	for i := range lines {
+		lines[i] = lipgloss.NewStyle().Width(innerWidth).Render(lines[i])
 	}
-	sort.Strings(keys)
-	entryCount := 0
-	for _, key := range keys {
-		msg := strings.TrimSpace(p.Entries[key])
-		if msg == "" {
-			continue
-		}
-		lines = append(lines, "  "+ansi.Truncate(key+"  "+strings.Split(msg, "\n")[0], innerWidth-2, "…"))
-		entryCount++
-		if entryCount == 10 {
-			break
-		}
-	}
-	if entryCount == 0 {
-		lines = append(lines, "  No saved entries in this month")
-	}
-
 	for len(lines) > height-4 {
 		lines = lines[:len(lines)-1]
 	}
@@ -93,7 +108,7 @@ func (p Preview) View() tea.View {
 		lines = append(lines, "")
 	}
 
-	top := backend.GenBorder(" Next 7 days ", p.Style.BorderColor.ToStyle(), backend.Top, width-2)
+	top := backend.GenBorder(" Task details ", border, backend.Top, width-2)
 	box := lipgloss.NewStyle().
 		Width(width).
 		Height(height-1).
@@ -102,6 +117,44 @@ func (p Preview) View() tea.View {
 		Border(lipgloss.RoundedBorder(), false, true, true, true)
 	content := box.Render(strings.Join(lines, "\n"))
 	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, top, content))
+}
+
+func wrapText(text string, width int) string {
+	if text == "" {
+		return "  (untitled)"
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return "  "
+	}
+	var lines []string
+	line := "  "
+	for _, word := range words {
+		if lipgloss.Width(line)+1+lipgloss.Width(word) > width && line != "  " {
+			lines = append(lines, line)
+			line = "  " + word
+		} else if line == "  " {
+			line += word
+		} else {
+			line += " " + word
+		}
+	}
+	lines = append(lines, line)
+	return strings.Join(lines, "\n")
+}
+
+func barFill(done, total, segs int) int {
+	if total <= 0 {
+		return 0
+	}
+	n := (done*segs + total/2) / total
+	if done > 0 && n == 0 {
+		n = 1
+	}
+	if done < total && n == segs {
+		n = segs - 1
+	}
+	return n
 }
 
 func (p Preview) Update(msg tea.Msg) (Preview, tea.Cmd) {
