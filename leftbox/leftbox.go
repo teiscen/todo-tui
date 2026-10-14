@@ -46,7 +46,9 @@ func (l Leftbox) Selected() (Row, bool) {
 func (l Leftbox) View() tea.View {
 	s := l.Style
 	contentW := s.Width - 4   // border + 1 column of padding on each side
-	bodyH := s.Height - 2 - 2 // top line, bottom border, then filter bar + blank line
+	header := append([]string{l.tabBar()}, l.filterLines(contentW)...)
+	header = append(header, "")
+	bodyH := s.Height - 2 - len(header)
 
 	vis := visible(l.Rows, l.Tab, l.Filter)
 
@@ -72,10 +74,10 @@ func (l Leftbox) View() tea.View {
 	start := windowStart(len(body), cursorLine, bodyH)
 	body = body[start:min(len(body), start+bodyH)]
 
-	lines := append([]string{l.filterBar(contentW), ""}, body...)
+	lines := append(header, body...)
 
 	top := backend.GenBorder(
-		l.tabBar(),
+		" Tasks ",
 		s.ColorBorder.ToStyle(),
 		backend.Top,
 		s.Width-2,
@@ -89,6 +91,40 @@ func (l Leftbox) View() tea.View {
 
 	content := box.Render(strings.Join(lines, "\n"))
 	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, top, content))
+}
+
+// HoverAt maps a terminal Y coordinate to a task row in the left panel.
+func (l *Leftbox) HoverAt(y int) bool {
+	contentW := l.Style.Width - 4
+	header := append([]string{l.tabBar()}, l.filterLines(contentW)...)
+	header = append(header, "")
+	bodyH := l.Style.Height - 2 - len(header)
+	vis := visible(l.Rows, l.Tab, l.Filter)
+
+	var body []int
+	prev := Group(-1)
+	cursorLine := 0
+	for i, r := range vis {
+		if r.Group != prev {
+			if prev != -1 {
+				body = append(body, -1)
+			}
+			body = append(body, -1)
+			prev = r.Group
+		}
+		if i == l.Cursor {
+			cursorLine = len(body)
+		}
+		body = append(body, i)
+	}
+	start := windowStart(len(body), cursorLine, bodyH)
+	body = body[start:min(len(body), start+bodyH)]
+	index := y - (1 + len(header))
+	if index < 0 || index >= len(body) || body[index] < 0 || body[index] == l.Cursor {
+		return false
+	}
+	l.Cursor = body[index]
+	return true
 }
 
 func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
@@ -142,20 +178,42 @@ func (l Leftbox) tabBar() string {
 	return strings.Join(parts, " ")
 }
 
-// filterBar: [all] uni work gym ..., each label in its own color.
-func (l Leftbox) filterBar(width int) string {
+// filterLines renders colored label chips and wraps them onto as many lines as needed.
+func (l Leftbox) filterLines(width int) []string {
 	s := l.Style
-	item := func(name string, color backend.HexCode, active bool) string {
+	chips := []string{}
+	chipWidths := []int{}
+	add := func(name string, color backend.HexCode, active bool) {
+		text := " " + name + " "
 		if active {
-			return color.ToStyle().Bold(true).Render("[" + name + "]")
+			text = "[" + name + "]"
 		}
-		return color.ToStyle().Render(" " + name + " ")
+		chips = append(chips, color.ToStyle().Bold(active).Render(text))
+		chipWidths = append(chipWidths, lipgloss.Width(text))
 	}
-	parts := []string{item("all", s.ColorText, l.Filter == "")}
+	add("all", s.ColorText, l.Filter == "")
 	for _, id := range l.Labels.Order {
-		parts = append(parts, item(string(id), l.Labels.Info[id].Color, l.Filter == id))
+		add(string(id), l.Labels.Info[id].Color, l.Filter == id)
 	}
-	return ansi.Truncate(strings.Join(parts, ""), width, "…")
+	var lines []string
+	line := ""
+	lineWidth := 0
+	for i, chip := range chips {
+		w := chipWidths[i]
+		gap := 1
+		if line == "" { gap = 0 }
+		if line != "" && lineWidth+gap+w > width {
+			lines = append(lines, line)
+			line, lineWidth = chip, w
+			continue
+		}
+		if gap > 0 { line += " "; lineWidth++ }
+		line += chip
+		lineWidth += w
+	}
+	if line != "" { lines = append(lines, line) }
+	if len(lines) == 0 { return []string{""} }
+	return lines
 }
 
 func (l Leftbox) groupHeading(g Group) string {
