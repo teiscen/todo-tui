@@ -19,10 +19,12 @@ type Leftbox struct {
 	Tab    Tab
 	Filter backend.LabelID // "" = all labels
 	Cursor int             // index into the visible rows
+	Collapsed map[Group]bool
+	Expanded map[int]bool
 }
 
 func NewLeftbox() Leftbox {
-	return Leftbox{Style: GetDefaultStyle()}
+	return Leftbox{Style: GetDefaultStyle(), Collapsed: map[Group]bool{}, Expanded: map[int]bool{}}
 }
 
 func (l Leftbox) Init() tea.Cmd {
@@ -48,7 +50,8 @@ func (l Leftbox) View() tea.View {
 	contentW := s.Width - 4   // border + 1 column of padding on each side
 	header := append([]string{l.tabBar()}, l.filterLines(contentW)...)
 	header = append(header, "")
-	bodyH := s.Height - 2 - len(header)
+	footer := []string{s.ColorDim.ToStyle().Render("j/k move · space complete · f filter"), s.ColorDim.ToStyle().Render("enter collapse group · e expand task · [/] tabs")}
+	bodyH := s.Height - 2 - len(header) - len(footer)
 
 	vis := visible(l.Rows, l.Tab, l.Filter)
 
@@ -63,10 +66,19 @@ func (l Leftbox) View() tea.View {
 			body = append(body, l.groupHeading(r.Group))
 			prev = r.Group
 		}
+		if l.Collapsed[r.Group] { continue }
 		if i == l.Cursor {
 			cursorLine = len(body)
 		}
-		body = append(body, l.renderRow(r, i == l.Cursor, contentW))
+		marker := "▸ "
+		if l.Expanded[r.ID] { marker = "▾ " }
+		body = append(body, marker+l.renderRow(r, i == l.Cursor, contentW-2))
+		if l.Expanded[r.ID] {
+			detail := "  No subtasks"
+			if r.StepsTotal > 0 { detail = fmt.Sprintf("  Progress: %d/%d steps completed", r.StepsDone, r.StepsTotal) }
+			if r.Schedule != "" { detail += " · " + r.Schedule }
+			body = append(body, s.ColorDim.ToStyle().Render(ansi.Truncate(detail, contentW, "…")))
+		}
 	}
 	if len(body) == 0 {
 		body = []string{s.ColorDim.ToStyle().Render("nothing here")}
@@ -75,6 +87,7 @@ func (l Leftbox) View() tea.View {
 	body = body[start:min(len(body), start+bodyH)]
 
 	lines := append(header, body...)
+	lines = append(lines, footer...)
 
 	top := backend.GenBorder(
 		" Tasks ",
@@ -155,6 +168,10 @@ func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 		return l, l.selectCmd()
 	case " ", "space":
 		return l, l.toggleCmd()
+	case "enter":
+		if r, ok := l.Selected(); ok { if l.Collapsed == nil { l.Collapsed = map[Group]bool{} }; l.Collapsed[r.Group] = !l.Collapsed[r.Group]; l.clampCursor() }
+	case "e":
+		if r, ok := l.Selected(); ok { if l.Expanded == nil { l.Expanded = map[int]bool{} }; l.Expanded[r.ID] = !l.Expanded[r.ID] }
 	}
 	return l, nil
 }
