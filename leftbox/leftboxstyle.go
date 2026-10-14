@@ -36,7 +36,7 @@ func GetDefaultStyle() LeftboxStyle {
 		ProgWidth: 10,
 		DueWidth:  7,
 
-		CursorChar: "▸",
+		CursorChar: " ",
 		CheckOpen:  "[ ]",
 		CheckDone:  "[x]",
 		BarFull:    "▰",
