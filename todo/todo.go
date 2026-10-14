@@ -61,8 +61,7 @@ func (t *Todo) View() tea.View {
 func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.MouseMotionMsg:
-		mouse := m.Mouse()
-		if mouse.X < t.leftboxModel.Style.Width && t.leftboxModel.HoverAt(mouse.Y) {
+		if m.X < t.leftboxModel.Style.Width && t.leftboxModel.HoverAt(m.Y) {
 			if row, ok := t.leftboxModel.Selected(); ok {
 				t.previewModel.SetTask(row, true)
 			}
