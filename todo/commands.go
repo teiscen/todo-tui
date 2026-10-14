@@ -1,8 +1,11 @@
 package todo
 
 import (
+	"sort"
+
 	"todo-tui/backend"
 	"todo-tui/database"
+	"todo-tui/weekly"
 )
 
 func (t *Todo) ReloadPlannerState(lID backend.LabelID, date backend.Date) {
@@ -17,6 +20,81 @@ func (t *Todo) ReloadPlannerState(lID backend.LabelID, date backend.Date) {
 		t.db, sDate, eDate, lID,
 	)
 	t.plannerModel.ReloadState(sDate, entries)
+}
+
+func (t *Todo) LoadWeeklyData(refDate backend.Date) {
+	today := refDate
+	weekLater := today.AddDate(0, 0, 6)  // 7 days total (including today)
+	pastDays := today.AddDate(0, 0, -99) // 99 days ago for overdue
+
+	// Fetch overdue entries (99 days ago up to today)
+	overdueEntries, err := database.FetchAllEntriesInRange(t.db, pastDays, today)
+	if err != nil {
+		overdueEntries = make(map[string]map[string]string)
+	}
+
+	// Fetch upcoming entries (today to 7 days later)
+	upcomingEntries, err := database.FetchAllEntriesInRange(t.db, today, weekLater)
+	if err != nil {
+		upcomingEntries = make(map[string]map[string]string)
+	}
+
+	// Sort overdue dates (newest first for overdue list)
+	overdueDates := make([]string, 0, len(overdueEntries))
+	for d := range overdueEntries {
+		overdueDates = append(overdueDates, d)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(overdueDates))) // newest first
+
+	// Sort upcoming dates (oldest first for chronological display)
+	upcomingDates := make([]string, 0, len(upcomingEntries))
+	for d := range upcomingEntries {
+		upcomingDates = append(upcomingDates, d)
+	}
+	sort.Strings(upcomingDates)
+
+	var tasks []weekly.Day
+	var overdue []weekly.Task
+
+	// Process overdue (newest first)
+	for _, dateKey := range overdueDates {
+		byLabel := overdueEntries[dateKey]
+		date, _ := backend.ParseSQL(dateKey)
+
+		for labelID, msg := range byLabel {
+			overdue = append(overdue, weekly.Task{
+				Date:    date,
+				Text:    msg,
+				LabelID: backend.LabelID(labelID),
+			})
+		}
+	}
+
+	// Process upcoming (chronological)
+	for _, dateKey := range upcomingDates {
+		byLabel := upcomingEntries[dateKey]
+		date, _ := backend.ParseSQL(dateKey)
+
+		var dayTasks []weekly.Task
+		for labelID, msg := range byLabel {
+			dayTasks = append(dayTasks, weekly.Task{
+				Date:    date,
+				Text:    msg,
+				LabelID: backend.LabelID(labelID),
+			})
+		}
+
+		if len(dayTasks) > 0 {
+			tasks = append(tasks, weekly.Day{
+				Date:  date,
+				Tasks: dayTasks,
+			})
+		}
+	}
+
+	t.weeklyModel.Tasks = tasks
+	t.weeklyModel.Overdue = overdue
+	t.weeklyModel.TopLine = 5 // Start scrolled down to show overdue
 }
 
 func (t *Todo) AddEntry(lID backend.LabelID, date backend.Date, msg string) {

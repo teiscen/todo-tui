@@ -40,6 +40,36 @@ func FetchGridEntries(
 	return msgs, nil
 }
 
+// FetchAllEntriesInRange fetches all entries across all labels for a date range.
+// Returns map[dateKey]map[labelID]msg
+func FetchAllEntriesInRange(
+	db *sql.DB, sDate, eDate backend.Date,
+) (map[string]map[string]string, error) {
+	query := `
+		SELECT date, label_name, msg FROM entries
+		WHERE date BETWEEN ? AND ?
+		ORDER BY date ASC
+	`
+	rows, err := db.Query(query, sDate.FormatSQL(), eDate.FormatSQL())
+	if err != nil {
+		return nil, fmt.Errorf("fetch all entries: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]map[string]string)
+	for rows.Next() {
+		var d, label, msg string
+		if err := rows.Scan(&d, &label, &msg); err != nil {
+			return nil, fmt.Errorf("fetch all entries: %w", err)
+		}
+		if result[d] == nil {
+			result[d] = make(map[string]string)
+		}
+		result[d][label] = msg
+	}
+	return result, nil
+}
+
 // ConnectDB opens (or creates) the sqlite file at dbPath.
 // Use ":memory:" for an in-memory database.
 func ConnectDB(dbPath string) (*sql.DB, error) {

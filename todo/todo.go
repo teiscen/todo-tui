@@ -40,7 +40,7 @@ func NewTodo(cfg config.Config, db *sql.DB) *Todo {
 }
 
 func (t *Todo) Init() tea.Cmd {
-	// return t.plannerModel.Init()
+	t.LoadWeeklyData(*t.plannerModel.SelectedDate())
 	return func() tea.Msg {
 		return planner.ChangeCalendarMsg{
 			LabelID: *t.plannerModel.SelectedLabel(),
@@ -70,6 +70,7 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l := m.LabelID
 		d := m.NewDate
 		t.ReloadPlannerState(l, d)
+		t.LoadWeeklyData(d)
 		return t, nil
 	case planner.SaveEntryMsg:
 		l := m.Label
