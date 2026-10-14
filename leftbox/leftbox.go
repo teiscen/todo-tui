@@ -154,11 +154,11 @@ func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 		l.Cursor--
 		l.clampCursor()
 		return l, l.selectCmd()
-	case "]":
+	case "]", "right_bracket", "close_bracket":
 		l.Tab = (l.Tab + 1) % tabCount
 		l.Cursor = 0
 		return l, l.selectCmd()
-	case "[":
+	case "[", "left_bracket", "open_bracket":
 		l.Tab = (l.Tab + tabCount - 1) % tabCount
 		l.Cursor = 0
 		return l, l.selectCmd()
