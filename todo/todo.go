@@ -87,7 +87,7 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if key, ok := msg.(tea.KeyPressMsg); ok {
 		switch key.String() {
-		case "j", "down", "k", "up", "[", "]", "f", "enter", "e":
+		case "j", "down", "k", "up", "[", "]", "left_bracket", "right_bracket", " ", "space", "f", "enter", "e":
 			var cmd tea.Cmd
 			t.leftboxModel, cmd = t.leftboxModel.Update(msg)
 			if row, ok := t.leftboxModel.Selected(); ok {
