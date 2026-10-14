@@ -15,6 +15,7 @@ import (
 type Todo struct {
 	db  *sql.DB
 	cfg config.Config
+	err error
 
 	plannerModel planner.Planner
 
@@ -22,8 +23,6 @@ type Todo struct {
 	previewModel preview.Preview
 
 	Style TodoStyle
-
-	// err is the last database error. Not displayed anywhere yet.
 }
 
 func NewTodo(cfg config.Config, db *sql.DB) *Todo {
