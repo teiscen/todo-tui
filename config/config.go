@@ -42,8 +42,6 @@ func LoadConfig(filePath string) (Config, error) {
 		return config, fmt.Errorf("parse config: %w", err)
 	}
 
-	// config.Calendar = MockCalendar()
-	// config.Calendar.Labels.Selected = config.Labels.Selected
 	return config, nil
 }
 
@@ -54,7 +52,6 @@ func (c Config) LoadCalendarModel() calendar.Calendar {
 	currLabel := c.Labels.Selected
 	style.ColorAccent = c.Labels.Info[currLabel].Color
 
-	// Use a fixed date in the mock data range (Oct 2026)
 	cal := calendar.NewCalendar(backend.NewDate(time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)))
 	cal.Style = style
 	return cal
@@ -66,14 +63,12 @@ func (c Config) LoadNotesModel() notes.Notes {
 	currLabel := c.Labels.Selected
 	style.ColorAccent = c.Labels.Info[currLabel].Color
 
-	notes := notes.NewNotes("")
-	notes.Style = style
-
-	return notes
+	n := notes.NewNotes("")
+	n.Style = style
+	return n
 }
 
 func (c Config) LoadPlannerModel() planner.Planner {
-	// Use a fixed date in the mock data range (Oct 2026)
 	p := planner.NewPlanner(backend.NewDate(time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)))
 	p.Style.BorderColor = c.Colors.Border
 	p.Labels = c.Labels
@@ -85,10 +80,13 @@ func (c Config) LoadPlannerModel() planner.Planner {
 
 func (c Config) LoadLeftboxModel() leftbox.Leftbox {
 	l := leftbox.NewLeftbox()
+	l.Labels = c.Labels
+	// These are the task rows currently present in the project. Replace this
+	// placeholder loader when task persistence is implemented.
+	l.ReloadState(leftbox.MockRows())
 	return l
 }
 
 func (c Config) LoadPreviewModel() preview.Preview {
-	p := preview.NewPreview()
-	return p
+	return preview.NewPreview()
 }
