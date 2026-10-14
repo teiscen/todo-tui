@@ -20,7 +20,6 @@ func (t *Todo) ReloadPlannerState(lID backend.LabelID, date backend.Date) {
 	}
 	t.err = nil
 	t.plannerModel.ReloadState(sDate, entries)
-	t.previewModel.SetEntries(entries)
 }
 
 func (t *Todo) AddEntry(lID backend.LabelID, date backend.Date, msg string) {
