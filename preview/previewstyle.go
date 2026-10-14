@@ -8,6 +8,6 @@ type PreviewStyle struct {
 
 func GetDefaultStyle() PreviewStyle {
 	return PreviewStyle{
-		BorderColor: backend.HexCode("#c6d0h5"),
+		BorderColor: backend.HexCode("#C6D0F5"),
 	}
 }
