@@ -67,6 +67,19 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return t, nil
+	case leftbox.ToggleTodoMsg:
+		// Task rows are currently held in the in-memory model, so toggle their
+		// state there until the task persistence layer is connected.
+		for i := range t.leftboxModel.Rows {
+			if t.leftboxModel.Rows[i].ID == m.ID {
+				t.leftboxModel.Rows[i].Done = !t.leftboxModel.Rows[i].Done
+				break
+			}
+		}
+		if row, ok := t.leftboxModel.Selected(); ok {
+			t.previewModel.SetTask(row, true)
+		}
+		return t, nil
 	case leftbox.SelectTodoMsg:
 		if row, ok := t.leftboxModel.Selected(); ok {
 			t.previewModel.SetTask(row, true)
@@ -87,7 +100,7 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if key, ok := msg.(tea.KeyPressMsg); ok {
 		switch key.String() {
-		case "j", "down", "k", "up", "[", "]", "left_bracket", "right_bracket", " ", "space", "f", "enter", "e":
+		case "j", "down", "k", "up", "[", "]", "left_bracket", "right_bracket", "open_bracket", "close_bracket", " ", "space", "f", "enter", "e":
 			var cmd tea.Cmd
 			t.leftboxModel, cmd = t.leftboxModel.Update(msg)
 			if row, ok := t.leftboxModel.Selected(); ok {
