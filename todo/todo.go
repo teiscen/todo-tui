@@ -27,13 +27,15 @@ type Todo struct {
 }
 
 func NewTodo(cfg config.Config, db *sql.DB) *Todo {
-	return &Todo{
+	t := &Todo{
 		db:           db,
 		cfg:          cfg,
 		plannerModel: cfg.LoadPlannerModel(),
 		leftboxModel: cfg.LoadLeftboxModel(),
 		previewModel: cfg.LoadPreviewModel(),
 	}
+	t.previewModel.SetRows(t.leftboxModel.Rows)
+	return t
 }
 
 func (t *Todo) Init() tea.Cmd {
@@ -47,37 +49,24 @@ func (t *Todo) Init() tea.Cmd {
 
 func (t *Todo) View() tea.View {
 	left := t.leftboxModel.View().Content
-	middle := lipgloss.JoinVertical(
-		lipgloss.Left,
-		t.previewModel.View().Content,
-	)
+	middle := t.previewModel.View().Content
 	right := t.plannerModel.View().Content
-	combined := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		left, middle, right,
-	)
+	combined := lipgloss.JoinHorizontal(lipgloss.Top, left, middle, right)
 	return tea.NewView(combined)
 }
 
 func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case planner.ChangeCalendarMsg:
-		l := m.LabelID
-		d := m.NewDate
-		t.ReloadPlannerState(l, d)
+		t.ReloadPlannerState(m.LabelID, m.NewDate)
 		return t, nil
 	case planner.SaveEntryMsg:
-		l := m.Label
-		d := m.Date
-		msg := m.Msg
-		t.AddEntry(l, d, msg)
-		t.ReloadPlannerState(l, d)
+		t.AddEntry(m.Label, m.Date, m.Msg)
+		t.ReloadPlannerState(m.Label, m.Date)
 		return t, nil
 	case planner.RemoveEntryMsg:
-		l := m.Label
-		d := m.Date
-		t.RemoveEntry(l, d)
-		t.ReloadPlannerState(l, d)
+		t.RemoveEntry(m.Label, m.Date)
+		t.ReloadPlannerState(m.Label, m.Date)
 		return t, nil
 	}
 
