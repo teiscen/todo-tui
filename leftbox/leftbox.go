@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// Leftbox owns task-list selection, filtering, grouping, and row expansion state.
 type Leftbox struct {
 	Style  LeftboxStyle
 	Labels backend.Labels
@@ -23,6 +24,7 @@ type Leftbox struct {
 	Expanded map[int]bool
 }
 
+// NewLeftbox initializes an empty list and its per-group/per-task UI state.
 func NewLeftbox() Leftbox {
 	return Leftbox{Style: GetDefaultStyle(), Collapsed: map[Group]bool{}, Expanded: map[int]bool{}}
 }
@@ -37,6 +39,7 @@ func (l *Leftbox) ReloadState(rows []Row) {
 	l.clampCursor()
 }
 
+// Selected returns the row at Cursor after applying the active tab and label filter.
 func (l Leftbox) Selected() (Row, bool) {
 	vis := visible(l.Rows, l.Tab, l.Filter)
 	if l.Cursor < 0 || l.Cursor >= len(vis) {
@@ -45,6 +48,7 @@ func (l Leftbox) Selected() (Row, bool) {
 	return vis[l.Cursor], true
 }
 
+// View renders the tab/filter header, grouped task rows, and keyboard hints.
 func (l Leftbox) View() tea.View {
 	s := l.Style
 	contentW := s.Width - 4   // border + 1 column of padding on each side
@@ -140,6 +144,7 @@ func (l *Leftbox) HoverAt(y int) bool {
 	return true
 }
 
+// Update handles list navigation and emits commands for selection or completion.
 func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
@@ -233,6 +238,7 @@ func (l Leftbox) filterLines(width int) []string {
 	return lines
 }
 
+// groupHeading styles a group title using its semantic urgency.
 func (l Leftbox) groupHeading(g Group) string {
 	s := l.Style
 	name := map[Group]string{
@@ -256,6 +262,7 @@ func (l Leftbox) groupHeading(g Group) string {
 // renderRow lays out one row as fixed columns:
 //
 //	▸ [ ] Title…            tag  ▰▰▱▱ 3/5   2d late
+// renderRow aligns each task's title, label, progress/schedule, and due-date columns.
 func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 	s := l.Style
 	dim := s.ColorDim.ToStyle()
@@ -318,6 +325,7 @@ func padLeft(s string, w int) string {
 	return strings.Repeat(" ", max(0, w-lipgloss.Width(s))) + s
 }
 
+// clampCursor keeps selection within the currently visible row range.
 func (l *Leftbox) clampCursor() {
 	n := len(visible(l.Rows, l.Tab, l.Filter))
 	l.Cursor = max(0, min(l.Cursor, n-1))
