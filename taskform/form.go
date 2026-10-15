@@ -69,10 +69,10 @@ func (f Form) Update(msg tea.Msg) (Form, tea.Cmd) {
 		if f.Kind == "weekdays" { t.Weekdays = 62 }
 		return f, func() tea.Msg { return SavedMsg{Task:t} }
 	case "tab", "down":
-		f.Focus = (f.Focus + 1) % 7
+		f.Focus = (f.Focus + 1) % 8
 		return f, nil
 	case "shift+tab", "up":
-		f.Focus = (f.Focus + 6) % 7
+		f.Focus = (f.Focus + 7) % 8
 		return f,nil
 	case "left", "right":
 		if f.Focus == 1 && len(f.Labels.Order) > 0 {
@@ -85,10 +85,16 @@ func (f Form) Update(msg tea.Msg) (Form, tea.Cmd) {
 			i:=0; for n,v:=range kinds { if v==f.Kind { i=n } }
 			if k=="right" { i=(i+1)%len(kinds) } else { i=(i+len(kinds)-1)%len(kinds) }
 			f.Kind=kinds[i]
+		} else if f.Focus == 7 {
+			if f.Task.Horizon == "long" { f.Task.Horizon = "small" } else { f.Task.Horizon = "long" }
 		}
 		return f,nil
 	case " ":
 		if f.Focus==4 { f.Recurring=!f.Recurring; return f,nil }
+		if f.Focus==0 { f.Title+=" "; return f,nil }
+		if f.Focus==2 { f.Due+=" "; return f,nil }
+		if f.Focus==3 { f.Notes+=" "; return f,nil }
+		if f.Focus==6 { f.Interval+=" "; return f,nil }
 	}
 	if k=="backspace" || k=="delete" {
 		switch f.Focus { case 0:f.Title=dropLast(f.Title); case 2:f.Due=dropLast(f.Due); case 3:f.Notes=dropLast(f.Notes); case 6:f.Interval=dropLast(f.Interval) }
@@ -106,6 +112,7 @@ func (f Form) View() tea.View {
 		border.Bold(true).Render("TASK EDITOR"),"",
 		f.field(0,"TITLE",f.Title),
 		f.field(1,"LABEL",f.labelText()),
+		f.field(7,"HORIZON",f.Task.Horizon),
 		f.field(2,"DUE DATE (YYYY-MM-DD)",f.Due),
 		f.field(3,"NOTES",f.Notes),
 		f.field(4,"RECURRING",map[bool]string{true:"Yes",false:"No"}[f.Recurring]),
