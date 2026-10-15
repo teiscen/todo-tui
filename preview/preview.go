@@ -11,16 +11,19 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// Preview displays details for the task currently selected in the left panel.
 type Preview struct {
 	Style    PreviewStyle
 	Selected leftbox.Row
 	HasTask  bool
 }
 
+// NewPreview creates the details panel with its default colors.
 func NewPreview() Preview {
 	return Preview{Style: GetDefaultStyle()}
 }
 
+// SetTask updates the task shown by the preview; ok=false shows the empty state.
 func (p *Preview) SetTask(row leftbox.Row, ok bool) {
 	p.Selected = row
 	p.HasTask = ok
@@ -28,6 +31,7 @@ func (p *Preview) SetTask(row leftbox.Row, ok bool) {
 
 func (p Preview) Init() tea.Cmd { return nil }
 
+// View renders task fields, then fits the result into the panel's fixed dimensions.
 func (p Preview) View() tea.View {
 	const width = 50
 	const height = 43
@@ -98,6 +102,7 @@ func (p Preview) View() tea.View {
 		lines = append(lines, fmt.Sprintf("  #%d", r.ID))
 	}
 
+	// Keep the panel height stable so the dashboard columns stay aligned.
 	for i := range lines {
 		lines[i] = lipgloss.NewStyle().Width(innerWidth).Render(lines[i])
 	}
@@ -119,6 +124,7 @@ func (p Preview) View() tea.View {
 	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, top, content))
 }
 
+// wrapText wraps a title at word boundaries while accounting for terminal cell width.
 func wrapText(text string, width int) string {
 	if text == "" {
 		return "  (untitled)"
@@ -143,6 +149,7 @@ func wrapText(text string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
+// barFill converts step completion into a bounded number of filled segments.
 func barFill(done, total, segs int) int {
 	if total <= 0 {
 		return 0
@@ -157,6 +164,7 @@ func barFill(done, total, segs int) int {
 	return n
 }
 
+// Update is intentionally a no-op because the root model owns task selection.
 func (p Preview) Update(msg tea.Msg) (Preview, tea.Cmd) {
 	return p, nil
 }
