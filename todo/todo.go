@@ -40,7 +40,7 @@ func NewTodo(cfg config.Config, db *sql.DB) *Todo {
 		plannerModel: cfg.LoadPlannerModel(),
 		leftboxModel: cfg.LoadLeftboxModel(),
 		previewModel: cfg.LoadPreviewModel(),
-		form: taskform.New(cfg.Labels),
+		form: taskform.New(cfg.Labels, cfg.Layout.Editor.Width, cfg.Layout.Editor.Height),
 	}
 
 	if err := t.syncLabels(); err != nil {
