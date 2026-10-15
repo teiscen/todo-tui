@@ -80,3 +80,29 @@ func SaveTask(db *sql.DB, t Task) (int64, error) {
 	if err := tx.Commit(); err != nil { return 0, err }
 	return id, nil
 }
+
+
+func ToggleTask(db *sql.DB, id int, recurring, done bool) error {
+	if recurring {
+		today := time.Now().Format("2006-01-02")
+		if done {
+			_, err := db.Exec("DELETE FROM completions WHERE todo_id=? AND date=?", id, today)
+			return err
+		}
+		_, err := db.Exec("INSERT OR IGNORE INTO completions (todo_id,date) VALUES (?,?)", id, today)
+		return err
+	}
+	if done {
+		_, err := db.Exec("UPDATE todos SET done_at=NULL WHERE id=?", id)
+		return err
+	}
+	_, err := db.Exec("UPDATE todos SET done_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?", id)
+	return err
+}
+
+func IsTaskDoneToday(db *sql.DB, id int, recurring bool, doneAt sql.NullString) (bool, error) {
+	if !recurring { return doneAt.Valid, nil }
+	var n int
+	err := db.QueryRow("SELECT COUNT(*) FROM completions WHERE todo_id=? AND date=?", id, time.Now().Format("2006-01-02")).Scan(&n)
+	return n > 0, err
+}
