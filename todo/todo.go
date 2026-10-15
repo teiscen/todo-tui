@@ -30,7 +30,17 @@ type Todo struct {
 
 	form taskform.Form
 	formActive bool
+	focus Pane
 }
+
+type Pane int
+
+const (
+	PaneTasks Pane = iota
+	PanePreview
+	PanePlanner
+	paneCount
+)
 
 // NewTodo creates the dashboard, ensures configured labels exist, and loads saved tasks.
 func NewTodo(cfg config.Config, db *sql.DB) *Todo {
@@ -41,6 +51,7 @@ func NewTodo(cfg config.Config, db *sql.DB) *Todo {
 		leftboxModel: cfg.LoadLeftboxModel(),
 		previewModel: cfg.LoadPreviewModel(),
 		form: taskform.New(cfg.Labels, cfg.Layout.Editor.Width, cfg.Layout.Editor.Height),
+		focus: PaneTasks,
 	}
 
 	if err := t.syncLabels(); err != nil {
@@ -78,15 +89,37 @@ func (t *Todo) Init() tea.Cmd {
 
 // View joins the task list, selected-task preview (or editor), and planner.
 func (t *Todo) View() tea.View {
+	// Render copies so focus styling does not alter the configured model colors.
+	tasks := t.leftboxModel
+	previewPanel := t.previewModel
+	plannerPanel := t.plannerModel
+
+	tasks.Style.ColorBorder = t.panelBorder(PaneTasks, string(tasks.Style.ColorBorder))
+	previewPanel.Style.BorderColor = t.panelBorder(PanePreview, string(previewPanel.Style.BorderColor))
+	plannerPanel.Style.BorderColor = t.panelBorder(PanePlanner, string(plannerPanel.Style.BorderColor))
+
 	content := lipgloss.JoinHorizontal(
 		lipgloss.Top,
-		t.leftboxModel.View().Content,
-		t.previewModel.View().Content,
-		t.plannerModel.View().Content,
+		withHelp(tasks.View().Content, t.focus == PaneTasks, "j/k move · space complete · enter group", "a add · e edit · f filter · [/] tabs"),
+		withHelp(previewPanel.View().Content, t.focus == PanePreview, "j/k scroll", "e edit selected task · a add task"),
+		withHelp(plannerPanel.View().Content, t.focus == PanePlanner, "h/j/k/l move date", "ctrl+w calendar/notes · ctrl+h/l label · ctrl+j/k month"),
 	)
 	view := tea.NewView(content)
 	view.MouseMode = tea.MouseModeAllMotion
 	return view
+}
+
+// panelBorder preserves the configured active color and mutes inactive panels.
+func (t *Todo) panelBorder(pane Pane, activeColor string) backend.HexCode {
+	if t.focus == pane { return backend.HexCode(activeColor) }
+	return backend.HexCode("#737994")
+}
+
+// withHelp places movement hints and panel-specific shortcuts below the panel.
+func withHelp(content string, focused bool, movement, specific string) string {
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#737994"))
+	if focused { style = style.Foreground(lipgloss.Color("#C6D0F5")) }
+	return lipgloss.JoinVertical(lipgloss.Left, content, style.Render(movement), style.Render(specific))
 }
 
 // Update routes messages to the active panel and handles database-backed task actions.
@@ -153,23 +186,39 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if key, ok := msg.(tea.KeyPressMsg); ok {
 		switch key.String() {
+		case "tab":
+			t.focus = (t.focus + 1) % paneCount
+			return t, nil
+		case "shift+tab":
+			t.focus = (t.focus + paneCount - 1) % paneCount
+			return t, nil
+		case "ctrl+1":
+			t.focus = PaneTasks
+			return t, nil
+		case "ctrl+2":
+			t.focus = PanePreview
+			return t, nil
+		case "ctrl+3":
+			t.focus = PanePlanner
+			return t, nil
 		case "a":
-			t.beginAdd()
-			return t, nil
+			if t.focus == PaneTasks || t.focus == PanePreview { t.beginAdd(); return t, nil }
 		case "e":
-			t.beginEdit()
-			return t, nil
-		case "j", "down", "k", "up", "[", "]", "left_bracket", "right_bracket",
-			"open_bracket", "close_bracket", " ", "space", "f", "enter":
-			var cmd tea.Cmd
+			if t.focus == PaneTasks || t.focus == PanePreview { t.beginEdit(); return t, nil }
+		}
+		var cmd tea.Cmd
+		switch t.focus {
+		case PaneTasks:
 			t.leftboxModel, cmd = t.leftboxModel.Update(msg)
 			t.syncPreview()
-			return t, cmd
+		case PanePlanner:
+			t.plannerModel, cmd = t.plannerModel.Update(msg)
 		}
+		return t, cmd
 	}
 
 	var cmd tea.Cmd
-	t.plannerModel, cmd = t.plannerModel.Update(msg)
+	if t.focus == PanePlanner { t.plannerModel, cmd = t.plannerModel.Update(msg) }
 	return t, cmd
 }
 
