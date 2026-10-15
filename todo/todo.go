@@ -151,12 +151,6 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.syncPreview()
 		return t, nil
 
-	case leftbox.SelectTodoMsg:
-		if !t.formActive {
-			t.syncPreview()
-		}
-		return t, nil
-
 	case planner.ChangeCalendarMsg:
 		t.ReloadPlannerState(m.LabelID, m.NewDate)
 		return t, nil

@@ -37,9 +37,23 @@ func (l Leftbox) Init() tea.Cmd {
 	return nil
 }
 
-// ReloadState swaps in freshly loaded rows and keeps the cursor on the screen.
+// ReloadState swaps in freshly loaded rows and keeps the same task selected
+// (by ID) when it is still visible; otherwise the cursor is clamped into range.
 func (l *Leftbox) ReloadState(rows []Row) {
+	var keepID int
+	keep := false
+	if cur, ok := l.Selected(); ok {
+		keepID, keep = cur.ID, true
+	}
 	l.Rows = rows
+	if keep {
+		for i, r := range l.selectableRows() {
+			if r.ID == keepID {
+				l.Cursor = i
+				return
+			}
+		}
+	}
 	l.clampCursor()
 }
 
@@ -64,26 +78,50 @@ func (l Leftbox) selectableRows() []Row {
 	return out
 }
 
-// View renders the tab/filter header, grouped task rows, and keyboard hints.
-func (l Leftbox) View() string {
-	s := l.Style
-	contentW := s.Width - 4 // border + 1 column of padding on each side
+// ── layout ─────────────────────────────────────────────────────────────
+
+// lineKind labels each body line so drawing and hover hit-testing consume the
+// same structure and can never disagree.
+type lineKind uint8
+
+const (
+	blankLine lineKind = iota
+	headingLine
+	itemLine
+	detailLine
+)
+
+// bodyLine is one rendered line of the task body. Item lines carry the
+// selectable index; the other kinds are not interactive.
+type bodyLine struct {
+	kind  lineKind
+	text  string // rendered content, already styled
+	index int    // selectable index for itemLine; -1 otherwise
+}
+
+// header returns the tab bar, the filter chips, and the trailing blank line
+// that separates them from the task body.
+func (l Leftbox) header(contentW int) []string {
 	header := append([]string{l.tabBar()}, l.filterLines(contentW)...)
-	header = append(header, "")
-	bodyH := s.Height - 2 - len(header)
+	return append(header, "")
+}
 
+// layout renders the grouped task body exactly once and returns it alongside
+// the body-line index of the selected task. View and HoverAt both consume this
+// single layout, so the keyboard cursor, drawing, and mouse hover always agree.
+func (l Leftbox) layout(contentW int) ([]bodyLine, int) {
 	vis := visible(l.Rows, l.Tab, l.Filter)
-
-	var body []string
+	body := make([]bodyLine, 0, len(vis))
 	cursorLine := 0
 	selectableIndex := 0
 	prev := Group(-1)
+
 	for _, r := range vis {
 		if r.Group != prev {
 			if prev != -1 {
-				body = append(body, "")
+				body = append(body, bodyLine{kind: blankLine})
 			}
-			body = append(body, l.groupHeading(r.Group, vis))
+			body = append(body, bodyLine{kind: headingLine, text: l.groupHeading(r.Group, vis)})
 			prev = r.Group
 		}
 		if l.Collapsed[r.Group] {
@@ -96,26 +134,51 @@ func (l Leftbox) View() string {
 		if l.Expanded[r.ID] {
 			marker = "▾ "
 		}
-		body = append(body, marker+l.renderRow(r, selectableIndex == l.Cursor, contentW-2))
+		body = append(body, bodyLine{
+			kind:  itemLine,
+			index: selectableIndex,
+			text:  marker + l.renderRow(r, selectableIndex == l.Cursor, contentW-2),
+		})
 		selectableIndex++
 		if l.Expanded[r.ID] {
-			detail := "  No subtasks"
-			if r.StepsTotal > 0 {
-				detail = fmt.Sprintf("  Progress: %d/%d steps completed", r.StepsDone, r.StepsTotal)
-			}
-			if r.Schedule != "" {
-				detail += " · " + r.Schedule
-			}
-			body = append(body, ui.Fg(s.Theme.Dim).Render(ansi.Truncate(detail, contentW, "…")))
+			body = append(body, bodyLine{kind: detailLine, text: l.detailLine(r, contentW)})
 		}
 	}
+
 	if len(body) == 0 {
-		body = []string{ui.Fg(s.Theme.Dim).Render("nothing here")}
+		body = []bodyLine{{kind: blankLine, text: ui.Fg(l.Style.Theme.Dim).Render("nothing here")}}
 	}
+	return body, cursorLine
+}
+
+// detailLine is the expanded row's sub-line (progress or "No subtasks").
+func (l Leftbox) detailLine(r Row, contentW int) string {
+	detail := "  No subtasks"
+	if r.StepsTotal > 0 {
+		detail = fmt.Sprintf("  Progress: %d/%d steps completed", r.StepsDone, r.StepsTotal)
+	}
+	if r.Schedule != "" {
+		detail += " · " + r.Schedule
+	}
+	return ui.Fg(l.Style.Theme.Dim).Render(ansi.Truncate(detail, contentW, "…"))
+}
+
+// View renders the tab/filter header, grouped task rows, and keyboard hints.
+func (l Leftbox) View() string {
+	s := l.Style
+	contentW := s.Width - 4 // border + 1 column of padding on each side
+	header := l.header(contentW)
+	bodyH := s.Height - 2 - len(header)
+
+	body, cursorLine := l.layout(contentW)
 	start := windowStart(len(body), cursorLine, bodyH)
 	body = body[start:min(len(body), start+bodyH)]
 
-	lines := append(header, body...)
+	lines := make([]string, 0, len(header)+len(body))
+	lines = append(lines, header...)
+	for _, line := range body {
+		lines = append(lines, line.text)
+	}
 
 	top := ui.GenBorder(
 		" Tasks ",
@@ -134,42 +197,26 @@ func (l Leftbox) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, top, content)
 }
 
-// HoverAt maps a terminal Y coordinate to a task row in the left panel.
+// HoverAt maps a terminal Y coordinate to a task row in the left panel, using
+// the same layout the View draws.
 func (l *Leftbox) HoverAt(y int) bool {
 	contentW := l.Style.Width - 4
-	header := append([]string{l.tabBar()}, l.filterLines(contentW)...)
-	header = append(header, "")
+	header := l.header(contentW)
 	bodyH := l.Style.Height - 2 - len(header)
-	vis := visible(l.Rows, l.Tab, l.Filter)
 
-	var body []int
-	prev := Group(-1)
-	cursorLine := 0
-	selectableIndex := 0
-	for _, r := range vis {
-		if r.Group != prev {
-			if prev != -1 {
-				body = append(body, -1)
-			}
-			body = append(body, -1)
-			prev = r.Group
-		}
-		if l.Collapsed[r.Group] {
-			continue
-		}
-		if selectableIndex == l.Cursor {
-			cursorLine = len(body)
-		}
-		body = append(body, selectableIndex)
-		selectableIndex++
-	}
+	body, cursorLine := l.layout(contentW)
 	start := windowStart(len(body), cursorLine, bodyH)
 	body = body[start:min(len(body), start+bodyH)]
+
 	index := y - (1 + len(header))
-	if index < 0 || index >= len(body) || body[index] < 0 || body[index] == l.Cursor {
+	if index < 0 || index >= len(body) {
 		return false
 	}
-	l.Cursor = body[index]
+	line := body[index]
+	if line.kind != itemLine || line.index == l.Cursor {
+		return false
+	}
+	l.Cursor = line.index
 	return true
 }
 
@@ -183,23 +230,23 @@ func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 	case "j", "down":
 		l.Cursor++
 		l.clampCursor()
-		return l, l.selectCmd()
+		return l, nil
 	case "k", "up":
 		l.Cursor--
 		l.clampCursor()
-		return l, l.selectCmd()
+		return l, nil
 	case "]", "right_bracket", "close_bracket":
 		l.Tab = (l.Tab + 1) % tabCount
 		l.Cursor = 0
-		return l, l.selectCmd()
+		return l, nil
 	case "[", "left_bracket", "open_bracket":
 		l.Tab = (l.Tab + tabCount - 1) % tabCount
 		l.Cursor = 0
-		return l, l.selectCmd()
+		return l, nil
 	case "f":
 		l.stepFilter()
 		l.Cursor = 0
-		return l, l.selectCmd()
+		return l, nil
 	case " ", "space":
 		return l, l.toggleCmd()
 	case "enter":
