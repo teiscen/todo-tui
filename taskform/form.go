@@ -8,7 +8,6 @@ import (
 
 	"todo-tui/backend"
 	"todo-tui/database"
-	"todo-tui/leftbox"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
