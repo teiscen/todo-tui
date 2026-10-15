@@ -7,6 +7,7 @@ import (
 	"todo-tui/backend"
 	"todo-tui/leftbox"
 	"todo-tui/taskform"
+	"todo-tui/ui"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -48,7 +49,7 @@ func (p Preview) View() tea.View {
 	width := p.Style.Width
 	height := p.Style.Height
 	innerWidth := width - 4
-	border := p.Style.BorderColor.ToStyle()
+	border := ui.Fg(p.Style.BorderColor)
 
 	var lines []string
 	if !p.HasTask {
@@ -62,7 +63,13 @@ func (p Preview) View() tea.View {
 		r := p.Selected
 		lines = append(lines, border.Bold(true).Render("TASK DETAILS"), "")
 		lines = append(lines, border.Render("TITLE"))
-		lines = append(lines, wrapText(r.Title, innerWidth))
+		if r.Title == "" {
+			lines = append(lines, "  (untitled)")
+		} else if wrapped := ui.WrapText(r.Title, innerWidth, 2); len(wrapped) == 0 {
+			lines = append(lines, "  ")
+		} else {
+			lines = append(lines, strings.Join(wrapped, "\n"))
+		}
 		lines = append(lines, "")
 
 		lines = append(lines, border.Render("STATUS"))
@@ -78,7 +85,7 @@ func (p Preview) View() tea.View {
 			label = string(r.LabelID)
 		}
 		if r.Color != "" {
-			label = r.Color.ToStyle().Bold(true).Render("  " + label)
+			label = ui.Fg(r.Color).Bold(true).Render("  " + label)
 		} else {
 			label = "  " + label
 		}
@@ -89,11 +96,11 @@ func (p Preview) View() tea.View {
 			lines = append(lines, "  "+r.Schedule)
 		}
 		if r.Due != "" {
-			dueStyle := backend.HexCode("#939AB7").ToStyle()
+			dueStyle := ui.Fg(backend.HexCode("#939AB7"))
 			if r.DueTone == leftbox.ToneLate {
-				dueStyle = backend.HexCode("#E78284").ToStyle()
+				dueStyle = ui.Fg(backend.HexCode("#E78284"))
 			} else if r.DueTone == leftbox.ToneSoon {
-				dueStyle = backend.HexCode("#E5C890").ToStyle()
+				dueStyle = ui.Fg(backend.HexCode("#E5C890"))
 			}
 			lines = append(lines, dueStyle.Render("  "+r.Due))
 		}
@@ -105,8 +112,8 @@ func (p Preview) View() tea.View {
 		if r.StepsTotal > 0 {
 			lines = append(lines, border.Render("PROGRESS"))
 			lines = append(lines, fmt.Sprintf("  %d of %d steps completed", r.StepsDone, r.StepsTotal))
-			filled := barFill(r.StepsDone, r.StepsTotal, 20)
-			lines = append(lines, "  "+backend.HexCode("#CA9EE6").ToStyle().Render(strings.Repeat("━", filled))+backend.HexCode("#939AB7").ToStyle().Render(strings.Repeat("─", 20-filled)))
+			filled := ui.BarFill(r.StepsDone, r.StepsTotal, 20)
+			lines = append(lines, "  "+ui.Fg(backend.HexCode("#CA9EE6")).Render(strings.Repeat("━", filled))+ui.Fg(backend.HexCode("#939AB7")).Render(strings.Repeat("─", 20-filled)))
 			lines = append(lines, "")
 		}
 
@@ -125,7 +132,7 @@ func (p Preview) View() tea.View {
 		lines = append(lines, "")
 	}
 
-	top := backend.GenBorder(" Task details ", border, backend.Top, width-2)
+	top := ui.GenBorder(" Task details ", border, ui.Top, width-2)
 	box := lipgloss.NewStyle().
 		Width(width).
 		Height(height-1).
@@ -134,46 +141,6 @@ func (p Preview) View() tea.View {
 		Border(lipgloss.RoundedBorder(), false, true, true, true)
 	content := box.Render(strings.Join(lines, "\n"))
 	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, top, content))
-}
-
-// wrapText wraps a title at word boundaries while accounting for terminal cell width.
-func wrapText(text string, width int) string {
-	if text == "" {
-		return "  (untitled)"
-	}
-	words := strings.Fields(text)
-	if len(words) == 0 {
-		return "  "
-	}
-	var lines []string
-	line := "  "
-	for _, word := range words {
-		if lipgloss.Width(line)+1+lipgloss.Width(word) > width && line != "  " {
-			lines = append(lines, line)
-			line = "  " + word
-		} else if line == "  " {
-			line += word
-		} else {
-			line += " " + word
-		}
-	}
-	lines = append(lines, line)
-	return strings.Join(lines, "\n")
-}
-
-// barFill converts step completion into a bounded number of filled segments.
-func barFill(done, total, segs int) int {
-	if total <= 0 {
-		return 0
-	}
-	n := (done*segs + total/2) / total
-	if done > 0 && n == 0 {
-		n = 1
-	}
-	if done < total && n == segs {
-		n = segs - 1
-	}
-	return n
 }
 
 // Update is intentionally a no-op because the root model owns task selection.

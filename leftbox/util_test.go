@@ -133,26 +133,6 @@ func TestOpenCounts(t *testing.T) {
 	}
 }
 
-func TestBarFill(t *testing.T) {
-	cases := []struct {
-		done, total, segs int
-		want              int
-	}{
-		{0, 0, 4, 0}, // zero total
-		{0, 4, 4, 0}, // nothing done
-		{1, 4, 4, 1},
-		{3, 4, 4, 3},
-		{4, 4, 4, 4},    // fully done
-		{1, 100, 4, 1},  // tiny progress floors at 1
-		{99, 100, 4, 3}, // near-complete caps below segs
-	}
-	for _, c := range cases {
-		if got := barFill(c.done, c.total, c.segs); got != c.want {
-			t.Errorf("barFill(%d,%d,%d) = %d, want %d", c.done, c.total, c.segs, got, c.want)
-		}
-	}
-}
-
 func TestWindowStart(t *testing.T) {
 	cases := []struct {
 		total, cursor, height int

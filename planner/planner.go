@@ -1,11 +1,10 @@
 package planner
 
 import (
-	"strings"
-
 	backend "todo-tui/backend"
 	"todo-tui/calendar"
 	"todo-tui/notes"
+	"todo-tui/ui"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -47,57 +46,28 @@ func (p Planner) Init() tea.Cmd {
 }
 
 func (p Planner) View() tea.View {
-	type posn int
-	const (
-		top posn = iota
-		mid
-		bot
-	)
 	width := 28
-	genBreak := func(text string, style lipgloss.Style, posn posn) string {
-		text = style.Render(text)
+	border := ui.Fg(p.Style.BorderColor)
 
-		var paddingL, paddingR, left, right string
-		pad := strings.Repeat("─", max(0, (width-lipgloss.Width(text))/2))
-		if lipgloss.Width(text)%2 == 1 {
-			paddingR = "─"
-		}
-		paddingL += pad
-		paddingR += pad
-
-		switch posn {
-		case top:
-			left = "╭" + paddingL
-			right = paddingR + "╮"
-		case mid:
-			left = "├" + paddingL
-			right = paddingR + "┤"
-		case bot:
-			left = "╰" + paddingL
-			right = paddingR + "╯"
-		}
-
-		borderStyle := p.Style.BorderColor.ToStyle()
-		return borderStyle.Render(left) + text + borderStyle.Render(right)
-	}
-
-	headerFull := genBreak(
-		p.CalendarModel.SelectedDate.Format(),
-		p.CalendarModel.GetSelectedColor().ToStyle().Padding(0, 1).Bold(true),
-		top,
+	headerFull := ui.GenBorder(
+		ui.Fg(p.CalendarModel.GetSelectedColor()).Padding(0, 1).Bold(true).Render(p.CalendarModel.SelectedDate.Format()),
+		border,
+		ui.Top,
+		width,
 	)
 
-	calendarBorder := p.Style.BorderColor.ToStyle().
+	calendarBorder := border.
 		Border(lipgloss.RoundedBorder(), false, true).
 		Render(p.CalendarModel.View().Content)
 
-	footerFull := genBreak(
-		p.Labels.GetName(),
-		p.Labels.GetColor().ToStyle().Padding(0, 1).Bold(true),
-		mid,
+	footerFull := ui.GenBorder(
+		ui.Fg(p.Labels.GetColor()).Padding(0, 1).Bold(true).Render(p.Labels.GetName()),
+		border,
+		ui.Mid,
+		width,
 	)
 
-	notesBorder := p.Style.BorderColor.ToStyle().Padding(1, 1).
+	notesBorder := border.Padding(1, 1).
 		Border(lipgloss.RoundedBorder(), false, true, true, true).
 		Render(p.NotesModel.View().Content)
 

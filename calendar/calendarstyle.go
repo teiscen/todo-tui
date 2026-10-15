@@ -2,6 +2,7 @@ package calendar
 
 import (
 	backend "todo-tui/backend"
+	"todo-tui/ui"
 
 	"charm.land/lipgloss/v2"
 )
@@ -41,7 +42,7 @@ func (c CalendarStyle) WeekdayStyle(isValid bool) lipgloss.Style {
 	if !isValid {
 		color, _ = c.ColorWeekday.MuteColorTarget(backend.HexCode("#303446"), 0.8)
 	}
-	return color.ToStyle().Width(c.ColumnWidth).Align(lipgloss.Center)
+	return ui.Fg(color).Width(c.ColumnWidth).Align(lipgloss.Center)
 }
 
 func (c CalendarStyle) WeekendStyle(isValid bool) lipgloss.Style {
@@ -49,7 +50,7 @@ func (c CalendarStyle) WeekendStyle(isValid bool) lipgloss.Style {
 	if !isValid {
 		color, _ = c.ColorWeekend.MuteColorTarget(backend.HexCode("#303446"), 0.8)
 	}
-	return color.ToStyle().Width(c.ColumnWidth).Align(lipgloss.Center)
+	return ui.Fg(color).Width(c.ColumnWidth).Align(lipgloss.Center)
 }
 
 func (c CalendarStyle) AccentStyle(isValid bool) lipgloss.Style {
@@ -57,7 +58,7 @@ func (c CalendarStyle) AccentStyle(isValid bool) lipgloss.Style {
 	if !isValid {
 		color, _ = c.ColorAccent.MuteColorTarget(backend.HexCode("#303446"), 0.8)
 	}
-	return color.ToStyle().Width(c.ColumnWidth).Align(lipgloss.Center)
+	return ui.Fg(color).Width(c.ColumnWidth).Align(lipgloss.Center)
 }
 
 func (c CalendarStyle) RenderCell(style lipgloss.Style, isSelected bool) string {

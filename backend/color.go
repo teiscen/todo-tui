@@ -5,16 +5,11 @@ import (
 	"math"
 	"strconv"
 	"strings"
-
-	lipgloss "charm.land/lipgloss/v2"
 )
 
+// HexCode is a "#RRGGBB" color. Turning one into a lipgloss style is the job
+// of the ui package, so backend has no rendering dependencies.
 type HexCode string
-
-// Temporary
-func (c HexCode) ToStyle() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(string(c)))
-}
 
 func (c HexCode) HexCodeToInt() (int, error) {
 	str := strings.TrimPrefix(string(c), "#")

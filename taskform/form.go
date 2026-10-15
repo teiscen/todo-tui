@@ -8,6 +8,7 @@ import (
 
 	"todo-tui/backend"
 	"todo-tui/database"
+	"todo-tui/ui"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -260,7 +261,7 @@ func (f *Form) removeLastCharacter() {
 
 // View renders the same editor for both adding and editing a task.
 func (f Form) View() tea.View {
-	style := f.Style.ToStyle()
+	style := ui.Fg(f.Style)
 	title := "NEW TASK"
 	if f.Editing {
 		title = "EDIT TASK"
@@ -283,7 +284,7 @@ func (f Form) View() tea.View {
 	}
 	lines = append(lines, "", style.Render("Tab/↑↓ move · ←/→ change choices · Space toggle"), style.Render("Ctrl+S save · Esc cancel"))
 	if f.Error != "" {
-		lines = append(lines, "", backend.HexCode("#E78284").ToStyle().Render(f.Error))
+		lines = append(lines, "", ui.Fg(backend.HexCode("#E78284")).Render(f.Error))
 	}
 
 	box := lipgloss.NewStyle().

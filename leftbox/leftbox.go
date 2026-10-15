@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"todo-tui/backend"
+	"todo-tui/ui"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -96,21 +97,21 @@ func (l Leftbox) View() tea.View {
 			detail := "  No subtasks"
 			if r.StepsTotal > 0 { detail = fmt.Sprintf("  Progress: %d/%d steps completed", r.StepsDone, r.StepsTotal) }
 			if r.Schedule != "" { detail += " · " + r.Schedule }
-			body = append(body, s.ColorDim.ToStyle().Render(ansi.Truncate(detail, contentW, "…")))
+			body = append(body, ui.Fg(s.ColorDim).Render(ansi.Truncate(detail, contentW, "…")))
 		}
 	}
 	if len(body) == 0 {
-		body = []string{s.ColorDim.ToStyle().Render("nothing here")}
+		body = []string{ui.Fg(s.ColorDim).Render("nothing here")}
 	}
 	start := windowStart(len(body), cursorLine, bodyH)
 	body = body[start:min(len(body), start+bodyH)]
 
 	lines := append(header, body...)
 
-	top := backend.GenBorder(
+	top := ui.GenBorder(
 		" Tasks ",
-		s.ColorBorder.ToStyle(),
-		backend.Top,
+		ui.Fg(s.ColorBorder),
+		ui.Top,
 		s.Width-2,
 	)
 	box := lipgloss.NewStyle().
@@ -215,9 +216,9 @@ func (l Leftbox) tabBar() string {
 	for i := range tabCount {
 		label := fmt.Sprintf("%s %d", tabNames[i], counts[i])
 		if Tab(i) == l.Tab {
-			parts = append(parts, s.ColorAccent.ToStyle().Bold(true).Render("["+label+"]"))
+			parts = append(parts, ui.Fg(s.ColorAccent).Bold(true).Render("["+label+"]"))
 		} else {
-			parts = append(parts, s.ColorDim.ToStyle().Render(" "+label+" "))
+			parts = append(parts, ui.Fg(s.ColorDim).Render(" "+label+" "))
 		}
 	}
 	return strings.Join(parts, " ")
@@ -233,7 +234,7 @@ func (l Leftbox) filterLines(width int) []string {
 		if active {
 			text = "[" + name + "]"
 		}
-		chips = append(chips, color.ToStyle().Bold(active).Render(text))
+		chips = append(chips, ui.Fg(color).Bold(active).Render(text))
 		chipWidths = append(chipWidths, lipgloss.Width(text))
 	}
 	add("all", s.ColorText, l.Filter == "")
@@ -284,7 +285,7 @@ func (l Leftbox) groupHeading(g Group, rows []Row) string {
 	if g == GroupOverdue {
 		color = s.ColorLate
 	}
-	return color.ToStyle().Bold(true).Render(name)
+	return ui.Fg(color).Bold(true).Render(name)
 }
 
 // renderRow lays out one row as fixed columns:
@@ -293,11 +294,11 @@ func (l Leftbox) groupHeading(g Group, rows []Row) string {
 // renderRow aligns each task's title, label, progress/schedule, and due-date columns.
 func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 	s := l.Style
-	dim := s.ColorDim.ToStyle()
+	dim := ui.Fg(s.ColorDim)
 
 	marker := " "
 	if selected {
-		marker = s.ColorAccent.ToStyle().Bold(true).Render(s.CursorChar)
+		marker = ui.Fg(s.ColorAccent).Bold(true).Render(s.CursorChar)
 	}
 	check := s.CheckOpen
 	if r.Done {
@@ -307,7 +308,7 @@ func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 	// marker + space + checkbox + space, then 3 single-space gaps between columns.
 	titleW := width - (1 + 1 + lipgloss.Width(check) + 1) - 3 - s.TagWidth - s.ProgWidth - s.DueWidth
 
-	titleStyle := s.ColorText.ToStyle()
+	titleStyle := ui.Fg(s.ColorText)
 	switch {
 	case r.Done:
 		titleStyle = dim.Strikethrough(true)
@@ -318,40 +319,32 @@ func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 
 	tagStyle, accent := dim, s.ColorAccent
 	if r.Color != "" {
-		tagStyle, accent = r.Color.ToStyle(), r.Color
+		tagStyle, accent = ui.Fg(r.Color), r.Color
 	}
 	tag := tagStyle.Render(ansi.Truncate(string(r.LabelID), s.TagWidth, ""))
 
 	prog := ""
 	switch {
 	case r.StepsTotal > 0:
-		n := barFill(r.StepsDone, r.StepsTotal, s.BarSegs)
-		prog = accent.ToStyle().Render(strings.Repeat(s.BarFull, n)) +
+		n := ui.BarFill(r.StepsDone, r.StepsTotal, s.BarSegs)
+		prog = ui.Fg(accent).Render(strings.Repeat(s.BarFull, n)) +
 			dim.Render(strings.Repeat(s.BarEmpty, s.BarSegs-n)+
 				fmt.Sprintf(" %d/%d", r.StepsDone, r.StepsTotal))
 	case r.Schedule != "":
 		prog = dim.Render(ansi.Truncate(r.Schedule, s.ProgWidth, ""))
 	}
 
-	due := s.ToneColor(r.DueTone).ToStyle().Render(r.Due)
+	due := ui.Fg(s.ToneColor(r.DueTone)).Render(r.Due)
 
 	return strings.Join([]string{
-		marker + " " + check + " " + padRight(title, titleW),
-		padRight(tag, s.TagWidth),
-		padRight(prog, s.ProgWidth),
-		padLeft(due, s.DueWidth),
+		marker + " " + check + " " + ui.PadRight(title, titleW),
+		ui.PadRight(tag, s.TagWidth),
+		ui.PadRight(prog, s.ProgWidth),
+		ui.PadLeft(due, s.DueWidth),
 	}, " ")
 }
 
 // ── small helpers ───────────────────────────────────────────────────────
-
-func padRight(s string, w int) string {
-	return s + strings.Repeat(" ", max(0, w-lipgloss.Width(s)))
-}
-
-func padLeft(s string, w int) string {
-	return strings.Repeat(" ", max(0, w-lipgloss.Width(s))) + s
-}
 
 // clampCursor keeps selection within the currently visible row range.
 func (l *Leftbox) clampCursor() {

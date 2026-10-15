@@ -139,22 +139,6 @@ func openCounts(rows []Row, filter backend.LabelID) [tabCount]int {
 	return n
 }
 
-// barFill is how many of segs segments are filled. It never shows an empty bar
-// once something is done, or a full one before everything is.
-func barFill(done, total, segs int) int {
-	if total <= 0 {
-		return 0
-	}
-	n := (done*segs + total/2) / total
-	if done > 0 && n == 0 {
-		n = 1
-	}
-	if done < total && n == segs {
-		n = segs - 1
-	}
-	return n
-}
-
 // windowStart is the first line to show when body is taller than height,
 // keeping the cursor line roughly centered.
 func windowStart(total, cursorLine, height int) int {

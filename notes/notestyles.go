@@ -2,6 +2,7 @@ package notes
 
 import (
 	backend "todo-tui/backend"
+	"todo-tui/ui"
 
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
@@ -30,23 +31,23 @@ func (n NotesStyle) GenStyle() textarea.Styles {
 
 	focused := textarea.StyleState{
 		Base:             lipgloss.NewStyle(), // Leave default and then later match the overall color scheme
-		Text:             cText.ToStyle(),
+		Text:             ui.Fg(cText),
 		LineNumber:       lipgloss.NewStyle(), // Not Used
 		CursorLineNumber: lipgloss.NewStyle(), // Not Used
 		CursorLine:       lipgloss.NewStyle().Background(lipgloss.Color(string(cAccentMute))),
-		EndOfBuffer:      cAccent.ToStyle(),
-		Placeholder:      cAccent.ToStyle(),
+		EndOfBuffer:      ui.Fg(cAccent),
+		Placeholder:      ui.Fg(cAccent),
 		Prompt:           lipgloss.NewStyle(), // Not Used
 	}
 
 	blurred := textarea.StyleState{
 		Base:             lipgloss.NewStyle(), // Leave default and then later match the overall color scheme
-		Text:             cTextMute.ToStyle(),
+		Text:             ui.Fg(cTextMute),
 		LineNumber:       lipgloss.NewStyle(), // Not Used
 		CursorLineNumber: lipgloss.NewStyle(), // Not Used
 		CursorLine:       lipgloss.NewStyle().Background(lipgloss.Color(string(cAccentMute))),
-		EndOfBuffer:      cAccentMute.ToStyle(),
-		Placeholder:      cAccent.ToStyle(),
+		EndOfBuffer:      ui.Fg(cAccentMute),
+		Placeholder:      ui.Fg(cAccent),
 		Prompt:           lipgloss.NewStyle(), // Not Used
 	}
 	cursor := textarea.CursorStyle{
