@@ -40,29 +40,3 @@ func (c Calendar) GetSelectedColor() backend.HexCode {
 func (c *Calendar) SetAccent(color backend.HexCode) {
 	c.Style.ColorAccent = color
 }
-
-// func (c *Calendar) UpdateGrid(hasEntry func(backend.Date) bool) {
-// 	checkValid := func(target backend.Date) bool {
-// 		return target.Month == c.SelectedDate.Month
-// 	}
-//
-// 	checkMarked := func(target backend.Date) bool {
-// 		return hasEntry(target)
-// 	}
-//
-// 	date := c.SelectedDate.GridStart()
-//
-// 	for row := range c.State {
-// 		for col := range c.State[row] {
-// 			cell := &c.State[row][col]
-//
-// 			*cell = Info{
-// 				Date:     date,
-// 				IsValid:  checkValid(date),
-// 				IsMarked: checkMarked(date),
-// 			}
-//
-// 			date = date.AddDate(0, 0, 1)
-// 		}
-// 	}
-// }

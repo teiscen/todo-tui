@@ -1,0 +1,4972 @@
+diff --git a/artifacts/config.yaml b/artifacts/config.yaml
+index 80072d6..0311c35 100644
+--- a/artifacts/config.yaml
++++ b/artifacts/config.yaml
+@@ -1,11 +1,6 @@
+-# -- Calendar --
+-# Colors: Weekend, Weekday, Accent
+-#
+-# -- Notes --
+-# Colors: Text, Accent
+-#
+-# -- Planner -- 
+-# Color: Border 
++# -- Colors --
++# text, border, weekday, weekend, dim, accent, late, soon
++# Anything left out keeps its default.
+ #
+ # -- Labels -- 
+ # Selected: LabelID
+@@ -17,6 +12,10 @@ colors:
+   border:  "#C6D0F5"
+   weekday: "#C6D0F5"
+   weekend: "#939AB7"
++  dim:     "#939AB7"
++  accent:  "#CA9EE6"
++  late:    "#E78284"
++  soon:    "#E5C890"
+   
+ labels:
+   selected: uni
+diff --git a/backend/calendar.go b/backend/calendar.go
+deleted file mode 100644
+index 7d5a238..0000000
+--- a/backend/calendar.go
++++ /dev/null
+@@ -1,20 +0,0 @@
+-package backend
+-
+-//
+-// type Calendar struct {
+-// 	Months map[Date]map[LabelID]Entry
+-// 	Labels Labels
+-// }
+-//
+-// func (c Calendar) GetEntry(d Date) (val Entry, ok bool) {
+-// 	val, ok = c.Months[d][c.Labels.Selected]
+-// 	return
+-// }
+-//
+-// func (c Calendar) GetCurrentLabel() LabelInfo {
+-// 	return c.Labels.Info[c.Labels.Selected]
+-// }
+-//
+-// func (c *Calendar) AddEntry(d Date, val Entry) {
+-// 	c.Months[d][c.Labels.Selected] = val
+-// }
+diff --git a/backend/color.go b/backend/color.go
+index 9005d7c..e83166c 100644
+--- a/backend/color.go
++++ b/backend/color.go
+@@ -5,105 +5,50 @@ import (
+ 	"math"
+ 	"strconv"
+ 	"strings"
+-
+-	lipgloss "charm.land/lipgloss/v2"
+-)
+-
+-type (
+-	ColorID string
+-	HexCode string
+-	Colors  map[ColorID]HexCode
+-
+-	ColoredString struct {
+-		Str string
+-		Hex HexCode
+-	}
+ )
+ 
+-// Temporary
+-func (c HexCode) ToStyle() lipgloss.Style {
+-	return lipgloss.NewStyle().Foreground(lipgloss.Color(string(c)))
+-}
++// HexCode is a "#RRGGBB" color. Turning one into a lipgloss style is the job
++// of the ui package, so backend has no rendering dependencies.
++type HexCode string
+ 
+ func (c HexCode) HexCodeToInt() (int, error) {
+-	str := strings.TrimPrefix(string(c), "#")
+-
+-	val32, err := strconv.ParseInt(str, 16, 32)
++	val32, err := strconv.ParseInt(strings.TrimPrefix(string(c), "#"), 16, 32)
+ 	if err != nil {
+ 		return 0, err
+ 	}
+ 	return int(val32), nil
+ }
+ 
+-func (c HexCode) ParseRGB() (r int, g int, b int, err error) {
++func (c HexCode) ParseRGB() (r, g, b int, err error) {
+ 	colorInt, err := c.HexCodeToInt()
+ 	if err != nil {
+ 		return 0, 0, 0, err
+ 	}
+-
+-	// Not neccessary but keeping it for parity with Green and Blue
+-	r = (colorInt & 0xFF0000) >> 16
+-	g = (colorInt & 0x00FF00) >> 8
+-	b = (colorInt & 0x0000FF) >> 0
+-
+-	return r, g, b, nil
++	return (colorInt & 0xFF0000) >> 16, (colorInt & 0x00FF00) >> 8, colorInt & 0x0000FF, nil
+ }
+ 
+ func CombineRGB(r, g, b int) (HexCode, error) {
+-	isValid := func(i int) bool {
+-		return i >= 0 && i <= 0xFF
+-	}
++	isValid := func(i int) bool { return i >= 0 && i <= 0xFF }
+ 	if !isValid(r) || !isValid(g) || !isValid(b) {
+ 		return HexCode("#FFFFFF"), fmt.Errorf("rgb value must be between 0 and 255")
+ 	}
+-
+-	combined := (r << 16) | (g << 8) | b
+-
+-	// %06X:0-pad left with 0 not space, 6-how much to pad, X-convert int to Hex
+-	return HexCode(fmt.Sprintf("#%06X", combined)), nil
++	// %06X: zero-pad to 6 digits, upper-case hex.
++	return HexCode(fmt.Sprintf("#%06X", (r<<16)|(g<<8)|b)), nil
+ }
+ 
+-// Pull the colors chanel towards the middle to the avg value of the original colors
+-func (c HexCode) MuteColorAvg() (HexCode, error) {
++// MuteColorTarget moves the color toward target by strength (0 = unchanged,
++// 1 = target). Meant for fading toward the background, e.g. "#303446".
++func (c HexCode) MuteColorTarget(target HexCode, strength float64) (HexCode, error) {
+ 	r, g, b, err := c.ParseRGB()
+ 	if err != nil {
+ 		return HexCode("#FFFFFF"), err
+ 	}
+-
+-	avg := (r + g + b) / 3
+-	adjust := func(i int) int {
+-		adjustment := float64(i-avg) * (-0.5)
+-		return i + int(adjustment)
+-	}
+-
+-	r = adjust(r)
+-	g = adjust(g)
+-	b = adjust(b)
+-
+-	newHexCode, err := CombineRGB(r, g, b)
+-	if err != nil {
+-		return HexCode("#FFFFFF"), err
+-	}
+-
+-	return newHexCode, nil
+-}
+-
+-// Averages out the colors, but inteded to be used with a muted color
+-// such as #808080
+-func (c HexCode) MuteColorTarget(target HexCode, strenght float64) (HexCode, error) {
+-	r, g, b, err := c.ParseRGB()
+-	if err != nil {
+-		return HexCode("#FFFFFF"), err
+-	}
+-
+ 	tr, tg, tb, err := target.ParseRGB()
+ 	if err != nil {
+ 		return HexCode("#FFFFFF"), err
+ 	}
+-
+ 	lerp := func(from, to int) int {
+-		return int(math.Round(float64(from) + float64(to-from)*strenght))
++		return int(math.Round(float64(from) + float64(to-from)*strength))
+ 	}
+-
+ 	return CombineRGB(lerp(r, tr), lerp(g, tg), lerp(b, tb))
+ }
+diff --git a/backend/date.go b/backend/date.go
+index e13cf14..860a6f8 100644
+--- a/backend/date.go
++++ b/backend/date.go
+@@ -1,137 +1,85 @@
+ package backend
+ 
+ import (
++	"strings"
+ 	"time"
+ )
+ 
++// Date is a calendar day with no time of day. It is always stored as midnight UTC,
++// so two Dates for the same day are equal with == as well as Equal.
++// Every method returns a new Date; none of them modify the receiver.
+ type Date struct {
+ 	t time.Time
+ }
+ 
+-func (d Date) GetTime() time.Time {
+-	return d.t
+-}
+-
+ func NewDate(t time.Time) Date {
+-	return Date{t: t}
++	return Date{t: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)}
+ }
+ 
+-func (d Date) IsWeekend() bool {
+-	if d.Weekday() == 0 || d.Weekday() == 6 {
+-		return true
+-	}
+-	return false
++func ParseSQL(str string) (Date, error) {
++	t, err := time.Parse("2006-01-02", str)
++	return Date{t: t}, err
+ }
+ 
+-func (c Date) Year() int {
+-	return c.t.Year()
+-}
++func (d Date) Year() int    { return d.t.Year() }
++func (d Date) Month() int   { return int(d.t.Month()) }
++func (d Date) Day() int     { return d.t.Day() }
++func (d Date) Weekday() int { return int(d.t.Weekday()) } // Sunday = 0
+ 
+-func (c Date) Month() int {
+-	return int(c.t.Month())
++func (d Date) IsWeekend() bool {
++	return d.Weekday() == 0 || d.Weekday() == 6
+ }
+ 
+-func (c Date) Day() int {
+-	return c.t.Day()
++func (d Date) FirstDay() Date {
++	return Date{t: time.Date(d.Year(), time.Month(d.Month()), 1, 0, 0, 0, 0, time.UTC)}
+ }
+ 
+-func (c Date) Location() *time.Location {
+-	return c.t.Location()
++func (d Date) LastDay() Date {
++	return Date{t: time.Date(d.Year(), time.Month(d.Month()+1), 0, 0, 0, 0, 0, time.UTC)}
+ }
+ 
+-func (c Date) Weekday() int {
+-	return int(c.t.Weekday())
++// NumDays is the number of days in d's month.
++func (d Date) NumDays() int {
++	return d.LastDay().Day()
+ }
+ 
+-func (c Date) NumDays() int {
+-	c.LastDay()
+-	return c.t.Day()
++// AddDate follows time.AddDate: a day that doesn't exist rolls into the next month.
++func (d Date) AddDate(y, m, days int) Date {
++	return Date{t: d.t.AddDate(y, m, days)}
+ }
+ 
+-func (c *Date) LastDay() {
+-	c.t = time.Date(
+-		c.Year(), time.Month(c.Month()+1), 0,
+-		0, 0, 0, 0, c.Location(),
+-	)
++// AddMonths moves by whole months and clamps the day instead of rolling over,
++// so Jan 31 + 1 month is Feb 28, not Mar 3.
++func (d Date) AddMonths(n int) Date {
++	first := d.FirstDay().AddDate(0, n, 0)
++	return first.AddDate(0, 0, min(d.Day(), first.NumDays())-1)
+ }
+ 
+-func (c *Date) FirstDay() {
+-	c.t = time.Date(
+-		c.Year(), time.Month(c.Month()), 1,
+-		0, 0, 0, 0, c.Location(),
+-	)
++// Compare returns -1, 0 or 1. The ISO key sorts the same way as the dates do.
++func (d Date) Compare(other Date) int {
++	return strings.Compare(d.Key(), other.Key())
+ }
+ 
+-func (c *Date) ChangeDate(y, m, d int) {
+-	c.t = c.t.AddDate(y, m, d)
++func (d Date) Equal(other Date) bool {
++	return d.Compare(other) == 0
+ }
+ 
+-func (c Date) AddDate(y, m, d int) Date {
+-	c.ChangeDate(y, m, d)
+-	return c
++// DaysUntil is how many days from d to other (positive when other is later).
++func (d Date) DaysUntil(other Date) int {
++	return int(other.t.Sub(d.t) / (24 * time.Hour))
+ }
+ 
+-func (c Date) Format() string {
+-	return c.t.Format("January 2")
++func (d Date) Format() string {
++	return d.t.Format("January 2")
+ }
+ 
+-// FormatSQL returns a zero-padded YYYY-MM-DD string, so text comparisons
++// FormatSQL is a zero-padded YYYY-MM-DD string, so text comparisons
+ // (BETWEEN, ORDER BY) in SQLite sort chronologically.
+-func (c Date) FormatSQL() string {
+-	return c.t.Format("2006-01-02")
+-}
+-
+-// Key returns a timezone-independent key for map lookups (YYYY-MM-DD).
+-func (c Date) Key() string {
+-	return c.t.Format("2006-01-02")
+-}
+-
+-// Equal reports whether c and other represent the same calendar date (ignores timezone).
+-func (c Date) Equal(other Date) bool {
+-	return c.Year() == other.Year() && c.Month() == other.Month() && c.Day() == other.Day()
++func (d Date) FormatSQL() string {
++	return d.t.Format("2006-01-02")
+ }
+ 
+-// Compare returns -1 if c < other, 0 if equal, 1 if c > other (date-only).
+-func (c Date) Compare(other Date) int {
+-	if c.Year() != other.Year() {
+-		if c.Year() < other.Year() {
+-			return -1
+-		}
+-		return 1
+-	}
+-	if c.Month() != other.Month() {
+-		if c.Month() < other.Month() {
+-			return -1
+-		}
+-		return 1
+-	}
+-	if c.Day() != other.Day() {
+-		if c.Day() < other.Day() {
+-			return -1
+-		}
+-		return 1
+-	}
+-	return 0
+-}
+-
+-// Before reports whether c is before other (date-only).
+-func (c Date) Before(other Date) bool {
+-	return c.Compare(other) < 0
+-}
+-
+-// After reports whether c is after other (date-only).
+-func (c Date) After(other Date) bool {
+-	return c.Compare(other) > 0
+-}
+-
+-// DaysUntil returns the number of days from c to other (positive if other is in the future).
+-func (c Date) DaysUntil(other Date) int {
+-	cMid := time.Date(c.Year(), time.Month(c.Month()), c.Day(), 0, 0, 0, 0, time.UTC)
+-	oMid := time.Date(other.Year(), time.Month(other.Month()), other.Day(), 0, 0, 0, 0, time.UTC)
+-	return int(oMid.Sub(cMid).Hours() / 24)
+-}
+-
+-func ParseSQL(str string) (Date, error) {
+-	t, err := time.Parse("2006-01-02", str)
+-	return Date{t: t}, err
++// Key is the same text, used for map lookups.
++func (d Date) Key() string {
++	return d.FormatSQL()
+ }
+diff --git a/backend/date_test.go b/backend/date_test.go
+new file mode 100644
+index 0000000..9b4a7b4
+--- /dev/null
++++ b/backend/date_test.go
+@@ -0,0 +1,39 @@
++package backend
++
++import (
++	"testing"
++	"time"
++)
++
++func d(y int, m time.Month, day int) Date {
++	return NewDate(time.Date(y, m, day, 15, 30, 0, 0, time.Local))
++}
++
++func TestAddMonthsClampsDay(t *testing.T) {
++	if got := d(2026, 1, 31).AddMonths(1); got.Key() != d(2026, 2, 28).Key() {
++		t.Errorf("Jan 31 + 1 month = %s", got.Key())
++	}
++	if got := d(2026, 3, 31).AddMonths(-1); got.Key() != d(2026, 2, 28).Key() {
++		t.Errorf("Mar 31 - 1 month = %s", got.Key())
++	}
++	if got := d(2026, 12, 15).AddMonths(1); got.Key() != d(2027, 1, 15).Key() {
++		t.Errorf("Dec 15 + 1 month = %s", got.Key())
++	}
++}
++
++func TestMonthBounds(t *testing.T) {
++	x := d(2028, 2, 10)
++	if x.FirstDay().Day() != 1 || x.LastDay().Day() != 29 || x.NumDays() != 29 {
++		t.Errorf("Feb 2028: first %d last %d days %d", x.FirstDay().Day(), x.LastDay().Day(), x.NumDays())
++	}
++}
++
++func TestDaysUntilAndCompare(t *testing.T) {
++	a, b := d(2026, 10, 15), d(2026, 10, 20)
++	if a.DaysUntil(b) != 5 || b.DaysUntil(a) != -5 || a.DaysUntil(a) != 0 {
++		t.Error("DaysUntil")
++	}
++	if a.Compare(b) >= 0 || b.Compare(a) <= 0 || !a.Equal(d(2026, 10, 15)) {
++		t.Error("Compare/Equal")
++	}
++}
+diff --git a/backend/entry.go b/backend/entry.go
+deleted file mode 100644
+index 9bbc7ac..0000000
+--- a/backend/entry.go
++++ /dev/null
+@@ -1,15 +0,0 @@
+-package backend
+-
+-type (
+-	Status int
+-	Entry  struct {
+-		Status Status
+-		Msg    string
+-	}
+-)
+-
+-const (
+-	NoEntry Status = iota
+-	Partial
+-	Full
+-)
+diff --git a/backend/label.go b/backend/label.go
+index bbc34fa..3e654a9 100644
+--- a/backend/label.go
++++ b/backend/label.go
+@@ -23,11 +23,6 @@ func (l Labels) GetName() string {
+ 	return l.Info[l.Selected].Name
+ }
+ 
+-func (l Labels) GetAdjacent(forward bool) LabelID {
+-	l.Step(forward)
+-	return l.Selected
+-}
+-
+ func (l *Labels) Step(forward bool) {
+ 	n := len(l.Order)
+ 	if n == 0 {
+diff --git a/backend/task.go b/backend/task.go
+new file mode 100644
+index 0000000..96a46cf
+--- /dev/null
++++ b/backend/task.go
+@@ -0,0 +1,113 @@
++package backend
++
++import (
++	"fmt"
++	"strings"
++)
++
++// Kind is which tab a task lives on.
++type Kind int
++
++const (
++	KindSmall Kind = iota
++	KindLong
++	KindRecurring
++	KindCount
++)
++
++var KindNames = [KindCount]string{"small", "long-term", "recurring"}
++
++// Group is the heading a task sits under in the task list.
++type Group int
++
++const (
++	GroupOverdue Group = iota
++	GroupToday
++	GroupWeek
++	GroupLater
++	GroupNoDate
++	GroupDone
++)
++
++// Tone says how urgent a due date is. The panes turn it into a color.
++type Tone int
++
++const (
++	ToneNormal Tone = iota
++	ToneSoon
++	ToneLate
++)
++
++// Task is one todo as loaded from storage.
++type Task struct {
++	ID    int
++	Kind  Kind
++	Title string
++	Label LabelID
++
++	// Due is the due date, or for a recurring task its next occurrence.
++	// nil = no date.
++	Due *Date
++	// Done is completion for a one-time task, or "done today" for a recurring one.
++	Done bool
++
++	StepsDone  int
++	StepsTotal int
++	Schedule   string // recurring only: "M/W/F", "daily", "every 3d"
++}
++
++// Group decides which heading the task sits under.
++func (t Task) Group(today Date) Group {
++	switch {
++	case t.Done:
++		return GroupDone
++	case t.Due == nil:
++		return GroupNoDate
++	}
++	days := today.DaysUntil(*t.Due)
++	switch {
++	case days < 0:
++		return GroupOverdue
++	case days == 0:
++		return GroupToday
++	case days <= 6 && t.Kind != KindRecurring:
++		return GroupWeek
++	default:
++		return GroupLater
++	}
++}
++
++// DueInfo is the text for the due column and how urgent it is.
++// Finished tasks and tasks without a date show nothing.
++func (t Task) DueInfo(today Date) (string, Tone) {
++	if t.Done || t.Due == nil {
++		return "", ToneNormal
++	}
++	days := today.DaysUntil(*t.Due)
++	switch {
++	case days < 0:
++		return fmt.Sprintf("%dd late", -days), ToneLate
++	case days == 0:
++		return "today", ToneSoon
++	case days == 1:
++		return "tmrw", ToneSoon
++	default:
++		return fmt.Sprintf("in %dd", days), ToneNormal
++	}
++}
++
++// ScheduleText turns a recurrence weekday bitmask (bit0 = Sunday) into "M/W/F".
++// Interval rules are better written by the caller: fmt.Sprintf("every %dd", n).
++func ScheduleText(mask int) string {
++	if mask&0x7F == 0x7F {
++		return "daily"
++	}
++	short := [7]string{"Su", "M", "Tu", "W", "Th", "F", "Sa"}
++	var out []string
++	for i, s := range short {
++		if mask&(1<<i) != 0 {
++			out = append(out, s)
++		}
++	}
++	return strings.Join(out, "/")
++}
+diff --git a/backend/task_test.go b/backend/task_test.go
+new file mode 100644
+index 0000000..22d8d54
+--- /dev/null
++++ b/backend/task_test.go
+@@ -0,0 +1,67 @@
++package backend
++
++import (
++	"testing"
++	"time"
++)
++
++var today = NewDate(time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC))
++
++func dp(days int) *Date { d := today.AddDate(0, 0, days); return &d }
++
++func TestTaskGroup(t *testing.T) {
++	tests := []struct {
++		name string
++		task Task
++		want Group
++	}{
++		{"done wins", Task{Due: dp(-3), Done: true}, GroupDone},
++		{"no date", Task{}, GroupNoDate},
++		{"late", Task{Due: dp(-1)}, GroupOverdue},
++		{"today", Task{Due: dp(0)}, GroupToday},
++		{"in six days", Task{Due: dp(6)}, GroupWeek},
++		{"in seven days", Task{Due: dp(7)}, GroupLater},
++		{"recurring soon is later", Task{Kind: KindRecurring, Due: dp(2)}, GroupLater},
++		{"recurring today", Task{Kind: KindRecurring, Due: dp(0)}, GroupToday},
++	}
++	for _, tt := range tests {
++		if got := tt.task.Group(today); got != tt.want {
++			t.Errorf("%s: got %v want %v", tt.name, got, tt.want)
++		}
++	}
++}
++
++func TestDueInfo(t *testing.T) {
++	tests := []struct {
++		task Task
++		text string
++		tone Tone
++	}{
++		{Task{Due: dp(-2)}, "2d late", ToneLate},
++		{Task{Due: dp(0)}, "today", ToneSoon},
++		{Task{Due: dp(1)}, "tmrw", ToneSoon},
++		{Task{Due: dp(9)}, "in 9d", ToneNormal},
++		{Task{}, "", ToneNormal},
++		{Task{Due: dp(-2), Done: true}, "", ToneNormal},
++	}
++	for _, tt := range tests {
++		text, tone := tt.task.DueInfo(today)
++		if text != tt.text || tone != tt.tone {
++			t.Errorf("got (%q,%v) want (%q,%v)", text, tone, tt.text, tt.tone)
++		}
++	}
++}
++
++func TestScheduleText(t *testing.T) {
++	tests := map[int]string{
++		0x7F:               "daily",
++		1<<1 | 1<<3 | 1<<5: "M/W/F",
++		1:                  "Su",
++		1<<2 | 1<<4 | 1<<6: "Tu/Th/Sa",
++	}
++	for mask, want := range tests {
++		if got := ScheduleText(mask); got != want {
++			t.Errorf("mask %b: got %q want %q", mask, got, want)
++		}
++	}
++}
+diff --git a/backend/theme.go b/backend/theme.go
+new file mode 100644
+index 0000000..28f2686
+--- /dev/null
++++ b/backend/theme.go
+@@ -0,0 +1,38 @@
++package backend
++
++// Theme is every color the panes use. It lives in config.yaml under "colors";
++// anything missing from the file keeps its default.
++type Theme struct {
++	Text    HexCode `yaml:"text"`
++	Border  HexCode `yaml:"border"`
++	Weekday HexCode `yaml:"weekday"`
++	Weekend HexCode `yaml:"weekend"`
++	Dim     HexCode `yaml:"dim"`
++	Accent  HexCode `yaml:"accent"`
++	Late    HexCode `yaml:"late"`
++	Soon    HexCode `yaml:"soon"`
++}
++
++func DefaultTheme() Theme {
++	return Theme{
++		Text:    "#C6D0F5",
++		Border:  "#C6D0F5",
++		Weekday: "#C6D0F5",
++		Weekend: "#939AB7",
++		Dim:     "#939AB7",
++		Accent:  "#CA9EE6",
++		Late:    "#E78284",
++		Soon:    "#E5C890",
++	}
++}
++
++// ToneColor is the color for a due-date tone.
++func (t Theme) ToneColor(tone Tone) HexCode {
++	switch tone {
++	case ToneLate:
++		return t.Late
++	case ToneSoon:
++		return t.Soon
++	}
++	return t.Dim
++}
+diff --git a/backend/util.go b/backend/util.go
+deleted file mode 100644
+index 96c27c7..0000000
+--- a/backend/util.go
++++ /dev/null
+@@ -1,41 +0,0 @@
+-package backend
+-
+-import (
+-	"strings"
+-
+-	lipgloss "charm.land/lipgloss/v2"
+-)
+-
+-type Posn int
+-
+-const (
+-	Top Posn = iota
+-	Mid
+-	Bot
+-)
+-
+-func GenBorder(text string, borderStyle lipgloss.Style, posn Posn, width int) string {
+-	// text = style.Render(text)
+-
+-	var paddingL, paddingR, left, right string
+-	pad := strings.Repeat("─", max(0, (width-lipgloss.Width(text))/2))
+-	if lipgloss.Width(text)%2 == 1 {
+-		paddingR = "─"
+-	}
+-	paddingL += pad
+-	paddingR += pad
+-
+-	switch posn {
+-	case Top:
+-		left = "╭" + paddingL
+-		right = paddingR + "╮"
+-	case Mid:
+-		left = "├" + paddingL
+-		right = paddingR + "┤"
+-	case Bot:
+-		left = "╰" + paddingL
+-		right = paddingR + "╯"
+-	}
+-
+-	return borderStyle.Render(left) + text + borderStyle.Render(right)
+-}
+diff --git a/calendar/calendar.go b/calendar/calendar.go
+index da72491..2550963 100644
+--- a/calendar/calendar.go
++++ b/calendar/calendar.go
+@@ -20,18 +20,14 @@ type Calendar struct {
+ 	State        [6][7]Info
+ }
+ 
+-func NewCalendar(date backend.Date) Calendar {
++func New(date backend.Date, theme backend.Theme) Calendar {
+ 	return Calendar{
+ 		SelectedDate: date,
+-		Style:        GetDefaultStyle(),
++		Style:        NewStyle(theme),
+ 	}
+ }
+ 
+-func (c Calendar) Init() tea.Cmd {
+-	return nil
+-}
+-
+-func (c Calendar) View() tea.View {
++func (c Calendar) View() string {
+ 	// Append the header
+ 	out := c.Style.RenderHeader()
+ 	// Loop through the state grid and begin rendering
+@@ -39,38 +35,34 @@ func (c Calendar) View() tea.View {
+ 		// Add the spacing between the rows
+ 		out += strings.Repeat("\n", c.Style.RowSpacing+1)
+ 		for col := range c.State[row] {
+-			// Determine if its the current month (Lowers saturation)
+ 			cell := c.State[row][col]
++			// Days outside the selected month are drawn with lower saturation
+ 			isValid := cell.Date.Month() == c.SelectedDate.Month()
+ 
+ 			var style lipgloss.Style
+-			if cell.IsMarked {
++			switch {
++			case cell.IsMarked:
+ 				style = c.Style.AccentStyle(isValid)
+-			} else if col == 0 || col == 6 {
++			case col == 0 || col == 6:
+ 				style = c.Style.WeekendStyle(isValid)
+-			} else {
++			default:
+ 				style = c.Style.WeekdayStyle(isValid)
+ 			}
+ 
+-			var icon string
++			icon := c.Style.CharIcon
+ 			if cell.Date.Equal(c.SelectedDate) {
+ 				icon = c.Style.CharSelected
+-			} else {
+-				icon = c.Style.CharIcon
+ 			}
+-
+ 			out += style.Render(icon)
+ 		}
+ 	}
+-
+-	cal := lipgloss.NewStyle().Padding(1, 0).Render(out)
+-	return tea.NewView(cal)
++	return lipgloss.NewStyle().Padding(1, 0).Render(out)
+ }
+ 
+-// hjkl - movements
++// hjkl move the selection, x marks or unmarks the day.
+ func (c Calendar) Update(msg tea.Msg) (Calendar, tea.Cmd) {
+ 	var cmd tea.Cmd
+-	if msg, ok := msg.(tea.KeyMsg); ok {
++	if msg, ok := msg.(tea.KeyPressMsg); ok {
+ 		switch msg.String() {
+ 		case "h":
+ 			cmd = c.Movement(Left)
+@@ -82,10 +74,7 @@ func (c Calendar) Update(msg tea.Msg) (Calendar, tea.Cmd) {
+ 			cmd = c.Movement(Right)
+ 		case "x":
+ 			cmd = c.ToggleMark()
+-		case "q", "ctrl+c":
+-			return c, tea.Quit
+ 		}
+ 	}
+-
+ 	return c, cmd
+ }
+diff --git a/calendar/calendarstyle.go b/calendar/calendarstyle.go
+index e938887..314ec2f 100644
+--- a/calendar/calendarstyle.go
++++ b/calendar/calendarstyle.go
+@@ -2,6 +2,7 @@ package calendar
+ 
+ import (
+ 	backend "todo-tui/backend"
++	"todo-tui/ui"
+ 
+ 	"charm.land/lipgloss/v2"
+ )
+@@ -20,7 +21,7 @@ type CalendarStyle struct {
+ 	ColorAccent  backend.HexCode
+ }
+ 
+-func GetDefaultStyle() CalendarStyle {
++func NewStyle(theme backend.Theme) CalendarStyle {
+ 	return CalendarStyle{
+ 		ColumnWidth: 4,
+ 		RowSpacing:  1,
+@@ -30,45 +31,31 @@ func GetDefaultStyle() CalendarStyle {
+ 		CharIcon:     "⬤",
+ 		CharSelected: "|⬤ |",
+ 
+-		ColorWeekday: backend.HexCode("#C6D0F5"),
+-		ColorWeekend: backend.HexCode("#939AB7"),
+-		ColorAccent:  backend.HexCode("#CA9EE6"),
++		ColorWeekday: theme.Weekday,
++		ColorWeekend: theme.Weekend,
++		ColorAccent:  theme.Accent,
+ 	}
+ }
+ 
+-func (c CalendarStyle) WeekdayStyle(isValid bool) lipgloss.Style {
+-	color := c.ColorWeekday
++// cell is the style for one grid cell. Days outside the selected month fade
++// toward the background.
++func (c CalendarStyle) cell(color backend.HexCode, isValid bool) lipgloss.Style {
+ 	if !isValid {
+-		// color, _ = c.ColorWeekday.MuteColorAvg()
+-		color, _ = c.ColorWeekday.MuteColorTarget(backend.HexCode("#303446"), 0.8)
++		color, _ = color.MuteColorTarget(backend.HexCode("#303446"), 0.8)
+ 	}
+-	return color.ToStyle().Width(c.ColumnWidth).Align(lipgloss.Center)
++	return ui.Fg(color).Width(c.ColumnWidth).Align(lipgloss.Center)
+ }
+ 
+-func (c CalendarStyle) WeekendStyle(isValid bool) lipgloss.Style {
+-	color := c.ColorWeekend
+-	if !isValid {
+-		// color, _ = c.ColorWeekend.MuteColorAvg()
+-		color, _ = c.ColorWeekend.MuteColorTarget(backend.HexCode("#303446"), 0.8)
+-	}
+-	return color.ToStyle().Width(c.ColumnWidth).Align(lipgloss.Center)
++func (c CalendarStyle) WeekdayStyle(isValid bool) lipgloss.Style {
++	return c.cell(c.ColorWeekday, isValid)
+ }
+ 
+-func (c CalendarStyle) AccentStyle(isValid bool) lipgloss.Style {
+-	color := c.ColorAccent
+-	if !isValid {
+-		// color, _ = c.ColorAccent.MuteColorAvg()
+-		color, _ = c.ColorAccent.MuteColorTarget(backend.HexCode("#303446"), 0.8)
+-	}
+-	return color.ToStyle().Width(c.ColumnWidth).Align(lipgloss.Center)
++func (c CalendarStyle) WeekendStyle(isValid bool) lipgloss.Style {
++	return c.cell(c.ColorWeekend, isValid)
+ }
+ 
+-func (c CalendarStyle) RenderCell(style lipgloss.Style, isSelected bool) string {
+-	str := c.CharIcon
+-	if isSelected {
+-		str = c.CharSelected
+-	}
+-	return style.Render(str)
++func (c CalendarStyle) AccentStyle(isValid bool) lipgloss.Style {
++	return c.cell(c.ColorAccent, isValid)
+ }
+ 
+ func (c CalendarStyle) RenderHeader() string {
+diff --git a/calendar/commands.go b/calendar/commands.go
+index 7e68d6a..df67e62 100644
+--- a/calendar/commands.go
++++ b/calendar/commands.go
+@@ -6,8 +6,6 @@ import (
+ 	tea "charm.land/bubbletea/v2"
+ )
+ 
+-// Mark/Unmark
+-// Movement
+ type direction int
+ 
+ const (
+@@ -26,40 +24,40 @@ type (
+ 	}
+ )
+ 
++// The commands below copy what they report before returning the closure:
++// a tea.Cmd runs later on another goroutine, and the calendar may have moved on.
++
+ func (c *Calendar) Movement(dir direction) tea.Cmd {
+-	oldDate := c.SelectedDate
++	old := c.SelectedDate
+ 	switch dir {
+ 	case Left:
+-		c.SelectedDate.ChangeDate(0, 0, -1)
++		c.SelectedDate = old.AddDate(0, 0, -1)
+ 	case Down:
+-		c.SelectedDate.ChangeDate(0, 0, 7)
++		c.SelectedDate = old.AddDate(0, 0, 7)
+ 	case Up:
+-		c.SelectedDate.ChangeDate(0, 0, -7)
++		c.SelectedDate = old.AddDate(0, 0, -7)
+ 	case Right:
+-		c.SelectedDate.ChangeDate(0, 0, 1)
++		c.SelectedDate = old.AddDate(0, 0, 1)
+ 	}
+ 
+-	if oldDate.Month() != c.SelectedDate.Month() {
+-		return func() tea.Msg {
+-			return ChangeMonthMsg{NewDate: c.SelectedDate}
+-		}
+-	} else {
+-		return func() tea.Msg {
+-			return ChangeDateMsg{NewDate: c.SelectedDate}
+-		}
++	newDate := c.SelectedDate
++	if old.Month() != newDate.Month() {
++		return func() tea.Msg { return ChangeMonthMsg{NewDate: newDate} }
+ 	}
++	return func() tea.Msg { return ChangeDateMsg{NewDate: newDate} }
++}
++
++// ShiftMonth moves the selection by whole months (clamping the day).
++func (c *Calendar) ShiftMonth(n int) {
++	c.SelectedDate = c.SelectedDate.AddMonths(n)
+ }
+ 
+ func (c *Calendar) ToggleMark() tea.Cmd {
+-	infoAddr := c.GetInfo(c.SelectedDate)
+-	if infoAddr == nil {
++	info := c.GetInfo(c.SelectedDate)
++	if info == nil {
+ 		return nil
+ 	}
+-	infoAddr.IsMarked = !infoAddr.IsMarked
+-	return func() tea.Msg {
+-		return ToggleMarkMsg{
+-			Date:   c.SelectedDate,
+-			Status: infoAddr.IsMarked,
+-		}
+-	}
++	info.IsMarked = !info.IsMarked
++	msg := ToggleMarkMsg{Date: c.SelectedDate, Status: info.IsMarked}
++	return func() tea.Msg { return msg }
+ }
+diff --git a/calendar/util.go b/calendar/util.go
+index a56da02..ef04f88 100644
+--- a/calendar/util.go
++++ b/calendar/util.go
+@@ -3,11 +3,9 @@ package calendar
+ import backend "todo-tui/backend"
+ 
+ func (c *Calendar) GetInfo(date backend.Date) *Info {
+-	// TODO:
+-	// Find a more efficient method
+ 	for row := range c.State {
+ 		for col := range c.State[row] {
+-			if date == c.State[row][col].Date {
++			if date.Equal(c.State[row][col].Date) {
+ 				return &c.State[row][col]
+ 			}
+ 		}
+@@ -15,23 +13,33 @@ func (c *Calendar) GetInfo(date backend.Date) *Info {
+ 	return nil
+ }
+ 
+-func (c Calendar) GetSelectedColor() backend.HexCode {
+-	var color backend.HexCode
++// SetGrid fills the 6x7 grid starting at start (the Sunday on or before the
++// 1st of the month) and marks the days isMarked reports.
++func (c *Calendar) SetGrid(start backend.Date, isMarked func(backend.Date) bool) {
++	date := start
++	for row := range c.State {
++		for col := range c.State[row] {
++			c.State[row][col] = Info{Date: date, IsMarked: isMarked(date)}
++			date = date.AddDate(0, 0, 1)
++		}
++	}
++}
+ 
+-	infoAddr := c.GetInfo(c.SelectedDate)
+-	if infoAddr == nil {
++func (c Calendar) GetSelectedColor() backend.HexCode {
++	info := c.GetInfo(c.SelectedDate)
++	if info == nil {
+ 		return backend.HexCode("#FFFFFF")
+ 	}
+-	if infoAddr.IsMarked {
++
++	color := c.Style.ColorWeekday
++	switch {
++	case info.IsMarked:
+ 		color = c.Style.ColorAccent
+-	} else if infoAddr.Date.Day() == 0 ||
+-		infoAddr.Date.Day() == 6 {
++	case info.Date.IsWeekend():
+ 		color = c.Style.ColorWeekend
+-	} else {
+-		color = c.Style.ColorWeekday
+ 	}
+ 
+-	if infoAddr.Date.Month() != c.SelectedDate.Month() {
++	if info.Date.Month() != c.SelectedDate.Month() {
+ 		color, _ = color.MuteColorTarget(backend.HexCode("#303446"), 0.8)
+ 	}
+ 	return color
+@@ -40,29 +48,3 @@ func (c Calendar) GetSelectedColor() backend.HexCode {
+ func (c *Calendar) SetAccent(color backend.HexCode) {
+ 	c.Style.ColorAccent = color
+ }
+-
+-// func (c *Calendar) UpdateGrid(hasEntry func(backend.Date) bool) {
+-// 	checkValid := func(target backend.Date) bool {
+-// 		return target.Month == c.SelectedDate.Month
+-// 	}
+-//
+-// 	checkMarked := func(target backend.Date) bool {
+-// 		return hasEntry(target)
+-// 	}
+-//
+-// 	date := c.SelectedDate.GridStart()
+-//
+-// 	for row := range c.State {
+-// 		for col := range c.State[row] {
+-// 			cell := &c.State[row][col]
+-//
+-// 			*cell = Info{
+-// 				Date:     date,
+-// 				IsValid:  checkValid(date),
+-// 				IsMarked: checkMarked(date),
+-// 			}
+-//
+-// 			date = date.AddDate(0, 0, 1)
+-// 		}
+-// 	}
+-// }
+diff --git a/config/config.go b/config/config.go
+index 6993f33..c495450 100644
+--- a/config/config.go
++++ b/config/config.go
+@@ -3,90 +3,29 @@ package config
+ import (
+ 	"fmt"
+ 	"os"
+-	"time"
+ 
+ 	"todo-tui/backend"
+-	"todo-tui/calendar"
+-	"todo-tui/leftbox"
+-	"todo-tui/notes"
+-	"todo-tui/planner"
+-	"todo-tui/preview"
+ 
+ 	"go.yaml.in/yaml/v3"
+ )
+ 
+-// TODO:
+-// Calendar is being loaded with MockCalendar
+-// until sql representation is finished.
+-// Once done: Change the way labels is being initialized
++// Config is data only. The root builds the panes from it.
+ type Config struct {
+-	Colors struct {
+-		Text    backend.HexCode `yaml:"text"`
+-		Border  backend.HexCode `yaml:"border"`
+-		Weekday backend.HexCode `yaml:"weekday"`
+-		Weekend backend.HexCode `yaml:"weekend"`
+-	} `yaml:"colors"`
++	Colors backend.Theme  `yaml:"colors"`
+ 	Labels backend.Labels `yaml:"labels"`
+-	// Calendar backend.Calendar `yaml:"-"`
+ }
+ 
++// LoadConfig reads the yaml file over the default theme, so any color
++// missing from the file keeps its default.
+ func LoadConfig(filePath string) (Config, error) {
+-	var config Config
++	cfg := Config{Colors: backend.DefaultTheme()}
+ 
+ 	data, err := os.ReadFile(filePath)
+ 	if err != nil {
+-		return config, fmt.Errorf("read config: %w", err)
++		return cfg, fmt.Errorf("read config: %w", err)
+ 	}
+-
+-	if err := yaml.Unmarshal(data, &config); err != nil {
+-		return config, fmt.Errorf("parse config: %w", err)
++	if err := yaml.Unmarshal(data, &cfg); err != nil {
++		return cfg, fmt.Errorf("parse config: %w", err)
+ 	}
+-
+-	return config, nil
+-}
+-
+-func (c Config) LoadCalendarModel() calendar.Calendar {
+-	style := calendar.GetDefaultStyle()
+-	style.ColorWeekday = c.Colors.Weekday
+-	style.ColorWeekend = c.Colors.Weekend
+-	currLabel := c.Labels.Selected
+-	style.ColorAccent = c.Labels.Info[currLabel].Color
+-
+-	cal := calendar.NewCalendar(backend.NewDate(time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)))
+-	cal.Style = style
+-	return cal
+-}
+-
+-func (c Config) LoadNotesModel() notes.Notes {
+-	style := notes.GetDefaultStyle()
+-	style.ColorText = c.Colors.Text
+-	currLabel := c.Labels.Selected
+-	style.ColorAccent = c.Labels.Info[currLabel].Color
+-
+-	n := notes.NewNotes("")
+-	n.Style = style
+-	return n
+-}
+-
+-func (c Config) LoadPlannerModel() planner.Planner {
+-	p := planner.NewPlanner(backend.NewDate(time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)))
+-	p.Style.BorderColor = c.Colors.Border
+-	p.Labels = c.Labels
+-	p.CalendarModel = c.LoadCalendarModel()
+-	p.NotesModel = c.LoadNotesModel()
+-	p.ApplyLabelColor()
+-	return p
+-}
+-
+-func (c Config) LoadLeftboxModel() leftbox.Leftbox {
+-	l := leftbox.NewLeftbox()
+-	l.Labels = c.Labels
+-	// These are the task rows currently present in the project. Replace this
+-	// placeholder loader when task persistence is implemented.
+-	l.ReloadState(leftbox.MockRows())
+-	return l
+-}
+-
+-func (c Config) LoadPreviewModel() preview.Preview {
+-	return preview.NewPreview()
++	return cfg, nil
+ }
+diff --git a/config/mock.go b/config/mock.go
+index 0c96e84..e836bb2 100644
+--- a/config/mock.go
++++ b/config/mock.go
+@@ -1,160 +1,40 @@
+ package config
+ 
+-//
+-// import (
+-// 	"math/rand"
+-// 	"time"
+-//
+-// 	"todo-tui/backend"
+-// )
+-//
+-// func MockCalendar() backend.Calendar {
+-// 	labels := backend.Labels{
+-// 		Selected: "uni",
+-// 		Info: map[backend.LabelID]backend.LabelInfo{
+-// 			"uni":  {Name: "University", Color: backend.HexCode("#81c8be")},
+-// 			"work": {Name: "Work", Color: backend.HexCode("#ca9ee6")},
+-// 			"gym":  {Name: "Gym", Color: backend.HexCode("#ef9f76")},
+-// 			"app":  {Name: "Application", Color: backend.HexCode("#babbf1")},
+-// 			"vol":  {Name: "Volunteer", Color: backend.HexCode("#f2d5cf")},
+-// 		},
+-// 		Order: []backend.LabelID{
+-// 			"uni", "work", "gym", "app", "vol",
+-// 		},
+-// 	}
+-//
+-// 	// Fixed seed so the mock data is identical on every run.
+-// 	rng := rand.New(rand.NewSource(2026))
+-// 	months := make(map[backend.Date]map[backend.LabelID]backend.Entry)
+-//
+-// 	set := func(d backend.Date, id backend.LabelID, s backend.Status, msg string) {
+-// 		if months[d] == nil {
+-// 			months[d] = make(map[backend.LabelID]backend.Entry)
+-// 		}
+-// 		months[d][id] = backend.Entry{Status: s, Msg: msg}
+-// 	}
+-// 	pick := func(s []string) string { return s[rng.Intn(len(s))] }
+-// 	// Full most of the time, Partial with probability p.
+-// 	roll := func(p float64) backend.Status {
+-// 		if rng.Float64() < p {
+-// 			return backend.Partial
+-// 		}
+-// 		return backend.Full
+-// 	}
+-//
+-// 	uniMsgs := []string{
+-// 		"Lectures: systems programming",
+-// 		"Operating systems lab",
+-// 		"Databases lecture + tutorial",
+-// 		"Algorithms lecture",
+-// 		"Worked on assignment",
+-// 		"Study group in the library",
+-// 	}
+-// 	uniPartial := []string{
+-// 		"Missed the morning lecture",
+-// 		"Left early, caught up at night",
+-// 		"Only made it to the lab",
+-// 	}
+-// 	examMsgs := []string{"Exam review", "Practice exams", "Final exam"}
+-//
+-// 	gymByDay := map[time.Weekday]string{
+-// 		time.Monday:    "Push day",
+-// 		time.Wednesday: "Pull day",
+-// 		time.Friday:    "Leg day",
+-// 		time.Sunday:    "Cardio + core",
+-// 	}
+-// 	gymPartial := []string{"Cut short, felt tired", "Warm-up and one lift only", "20 min session"}
+-//
+-// 	companies := []string{
+-// 		"Submitted application: backend developer co-op",
+-// 		"Submitted application: infrastructure intern",
+-// 		"Submitted application: data engineering role",
+-// 		"Submitted application: SWE new grad",
+-// 		"Submitted application: platform team intern",
+-// 	}
+-// 	appPartial := []string{
+-// 		"Drafted cover letter",
+-// 		"Tailored resume for posting",
+-// 		"Started application, finish tomorrow",
+-// 		"Prepped for coding screen",
+-// 	}
+-//
+-// 	volMsgs := []string{
+-// 		"Food bank shift",
+-// 		"Community garden cleanup",
+-// 		"Youth coding workshop",
+-// 		"Neighbourhood event setup",
+-// 	}
+-// 	volPartial := []string{"Helped for an hour", "Left early"}
+-//
+-// 	start := backend.NewDate(time.Date(2026, time.Month(9), 1, 0, 0, 0, 0, time.UTC))
+-// 	// Sep (30) + Oct (31) + Nov (30) = 91 days.
+-// 	for i := 0; i < 91; i++ {
+-// 		d := start.AddDate(0, 0, i)
+-// 		wd := d.Weekday()
+-// 		isWeekday := wd >= int(time.Monday) && wd <= int(time.Friday)
+-// 		examSeason := d.Month() == 11 && d.Day() >= 17
+-//
+-// 		// University: weekdays, with the odd light Sunday study session.
+-// 		switch {
+-// 		case isWeekday && examSeason:
+-// 			set(d, "uni", backend.Full, pick(examMsgs))
+-// 		case isWeekday:
+-// 			if s := roll(0.15); s == backend.Partial {
+-// 				set(d, "uni", s, pick(uniPartial))
+-// 			} else {
+-// 				set(d, "uni", s, pick(uniMsgs))
+-// 			}
+-// 		case wd == int(time.Sunday) && rng.Float64() < 0.4:
+-// 			set(d, "uni", backend.Partial, "Light study session")
+-// 		}
+-//
+-// 		// Work: Tue/Thu evenings, Saturday day shift.
+-// 		switch wd {
+-// 		case int(time.Tuesday), int(time.Thursday):
+-// 			if s := roll(0.1); s == backend.Partial {
+-// 				set(d, "work", s, "Left early")
+-// 			} else {
+-// 				set(d, "work", s, "Evening shift 4pm-10pm")
+-// 			}
+-// 		case int(time.Saturday):
+-// 			if s := roll(0.1); s == backend.Partial {
+-// 				set(d, "work", s, "Left early")
+-// 			} else {
+-// 				set(d, "work", s, "Day shift 9am-5pm")
+-// 			}
+-// 		}
+-//
+-// 		// Gym: Mon/Wed/Fri/Sun, ~20% of sessions skipped entirely.
+-// 		if msg, ok := gymByDay[time.Weekday(wd)]; ok && rng.Float64() > 0.2 {
+-// 			if s := roll(0.15); s == backend.Partial {
+-// 				set(d, "gym", s, pick(gymPartial))
+-// 			} else {
+-// 				set(d, "gym", s, msg)
+-// 			}
+-// 		}
+-//
+-// 		// Applications: ~30% of weekdays.
+-// 		if isWeekday && rng.Float64() < 0.3 {
+-// 			if s := roll(0.4); s == backend.Partial {
+-// 				set(d, "app", s, pick(appPartial))
+-// 			} else {
+-// 				set(d, "app", s, pick(companies))
+-// 			}
+-// 		}
+-//
+-// 		// Volunteering: most Sundays.
+-// 		if wd == int(time.Sunday) && rng.Float64() < 0.6 {
+-// 			if s := roll(0.15); s == backend.Partial {
+-// 				set(d, "vol", s, pick(volPartial))
+-// 			} else {
+-// 				set(d, "vol", s, pick(volMsgs))
+-// 			}
+-// 		}
+-// 	}
+-//
+-// return backend.Calendar{
+-// 	Months: months,
+-// 	Labels: labels,
+-// }
+-// }
++import "todo-tui/backend"
++
++// MockTasks is stand-in data until tasks are loaded from the database.
++// Due dates are relative to today so the list always looks the same.
++func MockTasks(today backend.Date) []backend.Task {
++	due := func(days int) *backend.Date {
++		d := today.AddDate(0, 0, days)
++		return &d
++	}
++	small := func(id int, title string, label backend.LabelID, d *backend.Date, done bool, sd, st int) backend.Task {
++		return backend.Task{ID: id, Kind: backend.KindSmall, Title: title, Label: label, Due: d, Done: done, StepsDone: sd, StepsTotal: st}
++	}
++	long := func(id int, title string, label backend.LabelID, d *backend.Date, sd, st int) backend.Task {
++		return backend.Task{ID: id, Kind: backend.KindLong, Title: title, Label: label, Due: d, StepsDone: sd, StepsTotal: st}
++	}
++	rec := func(id int, title string, label backend.LabelID, d *backend.Date, sched string) backend.Task {
++		return backend.Task{ID: id, Kind: backend.KindRecurring, Title: title, Label: label, Due: d, Schedule: sched}
++	}
++	return []backend.Task{
++		small(1, "Write lab report", "uni", due(-2), false, 3, 5),
++		small(3, "Email supervisor", "work", due(0), false, 0, 0),
++		small(9, "Laundry", "", nil, false, 0, 0),
++		small(4, "Order gym shoes", "gym", due(6), false, 0, 0),
++		small(5, "Book dentist", "", due(12), false, 0, 0),
++		small(6, "Pay tuition", "uni", due(20), false, 0, 0),
++		small(10, "Renew bus pass", "", nil, true, 0, 0),
++		small(11, "Return library books", "", nil, true, 0, 0),
++
++		long(2, "Apply to co-op", "app", due(3), 1, 5),
++		long(7, "Midterm prep", "uni", due(8), 2, 6),
++		long(8, "Plan volunteer shifts", "vol", due(21), 1, 4),
++
++		rec(12, "Gym", "gym", due(0), "M/W/F"),
++		rec(13, "Read 20 minutes", "", due(0), "daily"),
++		rec(15, "Water plants", "", due(2), "every 3d"),
++		rec(14, "Review notes", "uni", due(5), "Su"),
++	}
++}
+diff --git a/database/database.go b/database/database.go
+index ef70fb7..a8fcb50 100644
+--- a/database/database.go
++++ b/database/database.go
+@@ -2,73 +2,16 @@ package database
+ 
+ import (
+ 	"database/sql"
++	_ "embed"
+ 	"fmt"
+ 
+ 	"todo-tui/backend"
+ 
+-	_ "github.com/glebarez/go-sqlite"
++	_ "github.com/glebarez/go-sqlite" // registers the "sqlite" driver
+ )
+ 
+-func FetchGridEntries(
+-	db *sql.DB, sDate, eDate backend.Date, labelID backend.LabelID,
+-) (map[string]string, error) {
+-	query := `
+-		SELECT date, msg FROM entries
+-		WHERE label_name = ? AND date BETWEEN ? AND ?
+-	`
+-	rows, err := db.Query(
+-		query,
+-		labelID, sDate.FormatSQL(), eDate.FormatSQL(),
+-	)
+-	if err != nil {
+-		return nil, fmt.Errorf("fetch grid: %w", err)
+-	}
+-	defer rows.Close()
+-
+-	msgs := make(map[string]string)
+-	for rows.Next() {
+-		var d, msg string
+-		if err := rows.Scan(&d, &msg); err != nil {
+-			return nil, fmt.Errorf("fetch grid: %w", err)
+-		}
+-		date, err := backend.ParseSQL(d)
+-		if err != nil {
+-			return nil, fmt.Errorf("fetch grid %w", err)
+-		}
+-		msgs[date.Key()] = msg
+-	}
+-	return msgs, nil
+-}
+-
+-// FetchAllEntriesInRange fetches all entries across all labels for a date range.
+-// Returns map[dateKey]map[labelID]msg
+-func FetchAllEntriesInRange(
+-	db *sql.DB, sDate, eDate backend.Date,
+-) (map[string]map[string]string, error) {
+-	query := `
+-		SELECT date, label_name, msg FROM entries
+-		WHERE date BETWEEN ? AND ?
+-		ORDER BY date ASC
+-	`
+-	rows, err := db.Query(query, sDate.FormatSQL(), eDate.FormatSQL())
+-	if err != nil {
+-		return nil, fmt.Errorf("fetch all entries: %w", err)
+-	}
+-	defer rows.Close()
+-
+-	result := make(map[string]map[string]string)
+-	for rows.Next() {
+-		var d, label, msg string
+-		if err := rows.Scan(&d, &label, &msg); err != nil {
+-			return nil, fmt.Errorf("fetch all entries: %w", err)
+-		}
+-		if result[d] == nil {
+-			result[d] = make(map[string]string)
+-		}
+-		result[d][label] = msg
+-	}
+-	return result, nil
+-}
++//go:embed schema.sql
++var schema string
+ 
+ // ConnectDB opens (or creates) the sqlite file at dbPath.
+ // Use ":memory:" for an in-memory database.
+@@ -86,166 +29,85 @@ func ConnectDB(dbPath string) (*sql.DB, error) {
+ 	return db, nil
+ }
+ 
+-// TODO:
+-// Phase out the backend types (entry and label)
+-// to use these instead
+-
+-type Label struct {
+-	Name  string
+-	Color backend.HexCode
+-}
+-
+-type Entry struct {
+-	Date backend.Date
+-	Name string // Matches label name
+-	Msg  string
+-}
+-
+-// Basic IO
+-func AddEntry(db *sql.DB, date, name, msg string) error {
+-	query := `INSERT INTO entries (date, label_name, msg) VALUES (?, ?, ?)
+-	          ON CONFLICT(date, label_name) DO UPDATE SET msg = excluded.msg;`
+-	_, err := db.Exec(query, date, name, msg)
+-	if err != nil {
+-		return fmt.Errorf("failed to add entry: %w", err)
++// CreateTables creates every table and index that does not exist yet.
++func CreateTables(db *sql.DB) error {
++	if _, err := db.Exec(schema); err != nil {
++		return fmt.Errorf("create tables: %w", err)
+ 	}
+ 	return nil
+ }
+ 
+-func RemoveEntry(db *sql.DB, date, name string) error {
+-	query := `DELETE FROM entries WHERE date = ? AND label_name = ?;`
+-	_, err := db.Exec(query, date, name)
++// SyncLabels makes the labels table match the config, so entries and todos can
++// reference them. Labels already in the table but not in the config are kept.
++func SyncLabels(db *sql.DB, labels backend.Labels) error {
++	tx, err := db.Begin()
+ 	if err != nil {
+-		return fmt.Errorf("failed to remove entry: %w", err)
++		return fmt.Errorf("sync labels: %w", err)
+ 	}
+-	return nil
+-}
++	defer tx.Rollback()
+ 
+-func GetEntry(db *sql.DB, date, name string) (*Entry, error) {
+-	query := `SELECT date, label_name, msg FROM entries WHERE date = ? AND label_name = ?;`
+-	var e Entry
+-	err := db.QueryRow(query, date, name).Scan(&e.Date, &e.Name, &e.Msg)
+-	if err == sql.ErrNoRows {
+-		return nil, nil // Return nil if no entry found
+-	}
+-	if err != nil {
+-		return nil, fmt.Errorf("failed to get entry: %w", err)
++	for _, id := range labels.Order {
++		_, err := tx.Exec(
++			`INSERT INTO labels (name, color) VALUES (?, ?)
++			 ON CONFLICT(name) DO UPDATE SET color = excluded.color`,
++			string(id), string(labels.Info[id].Color),
++		)
++		if err != nil {
++			return fmt.Errorf("sync label %q: %w", id, err)
++		}
+ 	}
+-	return &e, nil
++	return tx.Commit()
+ }
+ 
+-func UpdateEntry(db *sql.DB, date, name, msg string) error {
+-	query := `
+-		UPDATE entries
+-		SET msg = ?
+-		WHERE date = ? AND label_name = ?;
+-	`
+-
+-	result, err := db.Exec(query, msg, date, name)
++// FetchGridEntries returns the entry text for one label, keyed by Date.Key(),
++// for every day from sDate to eDate inclusive.
++func FetchGridEntries(
++	db *sql.DB, sDate, eDate backend.Date, labelID backend.LabelID,
++) (map[string]string, error) {
++	rows, err := db.Query(
++		`SELECT date, msg FROM entries WHERE label_name = ? AND date BETWEEN ? AND ?`,
++		string(labelID), sDate.FormatSQL(), eDate.FormatSQL(),
++	)
+ 	if err != nil {
+-		return fmt.Errorf("failed to update entry: %w", err)
++		return nil, fmt.Errorf("fetch grid: %w", err)
+ 	}
++	defer rows.Close()
+ 
+-	rowsAffected, err := result.RowsAffected()
+-	if err != nil {
+-		return fmt.Errorf("failed to check rows affected: %w", err)
++	msgs := make(map[string]string)
++	for rows.Next() {
++		var d, msg string
++		if err := rows.Scan(&d, &msg); err != nil {
++			return nil, fmt.Errorf("fetch grid: %w", err)
++		}
++		date, err := backend.ParseSQL(d)
++		if err != nil {
++			return nil, fmt.Errorf("fetch grid: %w", err)
++		}
++		msgs[date.Key()] = msg
+ 	}
+-	if rowsAffected == 0 {
+-		return fmt.Errorf("no entry found for date %s and label %s", date, name)
++	if err := rows.Err(); err != nil {
++		return nil, fmt.Errorf("fetch grid: %w", err)
+ 	}
+-
+-	return nil
++	return msgs, nil
+ }
+ 
+-func AddLabel(db *sql.DB, name, color string) error {
+-	query := `INSERT INTO labels (name, color) VALUES (?, ?)
+-	          ON CONFLICT(name) DO UPDATE SET color = excluded.color;`
+-	_, err := db.Exec(query, name, color)
++// AddEntry creates the entry for a day and label, or replaces its text.
++func AddEntry(db *sql.DB, date, label, msg string) error {
++	_, err := db.Exec(
++		`INSERT INTO entries (date, label_name, msg) VALUES (?, ?, ?)
++		 ON CONFLICT(date, label_name) DO UPDATE SET msg = excluded.msg`,
++		date, label, msg,
++	)
+ 	if err != nil {
+-		return fmt.Errorf("failed to add label: %w", err)
++		return fmt.Errorf("add entry: %w", err)
+ 	}
+ 	return nil
+ }
+ 
+-func RemoveLabel(db *sql.DB, name string) error {
+-	// ON DELETE CASCADE will automatically clear referencing entries
+-	query := `DELETE FROM labels WHERE name = ?;`
+-	_, err := db.Exec(query, name)
++func RemoveEntry(db *sql.DB, date, label string) error {
++	_, err := db.Exec(`DELETE FROM entries WHERE date = ? AND label_name = ?`, date, label)
+ 	if err != nil {
+-		return fmt.Errorf("failed to remove label: %w", err)
++		return fmt.Errorf("remove entry: %w", err)
+ 	}
+ 	return nil
+ }
+-
+-// MORE complicated things
+-type Something map[string]string
+-
+-func GetMonth(db *sql.DB, name, startDate, endDate string) (Something, error) {
+-	query := `
+-		SELECT date, msg
+-		FROM entries
+-		WHERE label_name = ? AND date >= ? AND date <= ?;
+-	`
+-	rows, err := db.Query(query, name, startDate, endDate)
+-	if err != nil {
+-		return nil, fmt.Errorf("failed to query date range: %w", err)
+-	}
+-	defer rows.Close()
+-
+-	result := make(Something)
+-	for rows.Next() {
+-		var msg, date string
+-		if err := rows.Scan(&date, &msg); err != nil {
+-			return nil, fmt.Errorf("failed to scan entry: %w", err)
+-		}
+-		result[date] = msg
+-	}
+-	if err := rows.Err(); err != nil {
+-		return nil, fmt.Errorf("failed to read date range: %w", err)
+-	}
+-
+-	return result, nil
+-}
+-
+-// LabelCount is used at startup to decide whether to seed the mock data.
+-func LabelCount(db *sql.DB) (int, error) {
+-	var n int
+-	if err := db.QueryRow(`SELECT COUNT(*) FROM labels`).Scan(&n); err != nil {
+-		return 0, fmt.Errorf("count labels: %w", err)
+-	}
+-	return n, nil
+-}
+-
+-// PopulateFromCalendar seeds the tables from an in-memory calendar.
+-// The LabelID is stored in labels.name because entries.label_name (and
+-// FetchGrid) use the ID. Everything is inserted in one transaction.
+-// func PopulateFromCalendar(db *sql.DB, cal backend.Calendar) error {
+-// 	tx, err := db.Begin()
+-// 	if err != nil {
+-// 		return fmt.Errorf("begin: %w", err)
+-// 	}
+-// 	defer tx.Rollback()
+-//
+-// 	for _, id := range cal.Labels.Order {
+-// 		info := cal.Labels.Info[id]
+-// 		if _, err := tx.Exec(
+-// 			`INSERT INTO labels (name, color) VALUES (?, ?)`,
+-// 			string(id), string(info.Color),
+-// 		); err != nil {
+-// 			return fmt.Errorf("insert label %q: %w", id, err)
+-// 		}
+-// 	}
+-//
+-// 	for date, byLabel := range cal.Months {
+-// 		for id, e := range byLabel {
+-// 			if _, err := tx.Exec(
+-// 				`INSERT INTO entries (date, label_name, msg) VALUES (?, ?, ?)`,
+-// 				date.FormatSQL(), string(id), e.Msg,
+-// 			); err != nil {
+-// 				return fmt.Errorf("insert entry %s/%s: %w", date.FormatSQL(), id, err)
+-// 			}
+-// 		}
+-// 	}
+-//
+-// 	return tx.Commit()
+-// }
+diff --git a/database/database_test.go b/database/database_test.go
+new file mode 100644
+index 0000000..30a8dae
+--- /dev/null
++++ b/database/database_test.go
+@@ -0,0 +1,53 @@
++package database
++
++import (
++	"testing"
++	"time"
++
++	"todo-tui/backend"
++)
++
++func TestEntriesRoundTrip(t *testing.T) {
++	db, err := ConnectDB(":memory:")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer db.Close()
++	db.SetMaxOpenConns(1) // ":memory:" is per connection
++
++	if err := CreateTables(db); err != nil {
++		t.Fatal(err)
++	}
++	if err := CreateTables(db); err != nil { // safe to repeat
++		t.Fatal(err)
++	}
++	labels := backend.Labels{
++		Order: []backend.LabelID{"uni"},
++		Info:  map[backend.LabelID]backend.LabelInfo{"uni": {Name: "University", Color: "#81c8be"}},
++	}
++	if err := SyncLabels(db, labels); err != nil {
++		t.Fatal(err)
++	}
++
++	day := backend.NewDate(time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC))
++	if err := AddEntry(db, day.FormatSQL(), "uni", "lecture"); err != nil {
++		t.Fatal(err)
++	}
++	if err := AddEntry(db, day.FormatSQL(), "uni", "lecture + lab"); err != nil {
++		t.Fatal(err)
++	}
++	got, err := FetchGridEntries(db, day.AddDate(0, 0, -1), day.AddDate(0, 0, 1), "uni")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if got[day.Key()] != "lecture + lab" || len(got) != 1 {
++		t.Fatalf("got %v", got)
++	}
++	if err := RemoveEntry(db, day.FormatSQL(), "uni"); err != nil {
++		t.Fatal(err)
++	}
++	got, _ = FetchGridEntries(db, day, day, "uni")
++	if len(got) != 0 {
++		t.Fatalf("entry not removed: %v", got)
++	}
++}
+diff --git a/database/schema.sql b/database/schema.sql
+new file mode 100644
+index 0000000..50c7288
+--- /dev/null
++++ b/database/schema.sql
+@@ -0,0 +1,81 @@
++-- Every statement is IF NOT EXISTS, so running this on each start is safe.
++
++CREATE TABLE IF NOT EXISTS labels (
++    name  TEXT PRIMARY KEY,
++    color TEXT NOT NULL
++);
++
++CREATE TABLE IF NOT EXISTS todos (
++    id         INTEGER PRIMARY KEY AUTOINCREMENT,
++    title      TEXT NOT NULL,
++    label_id   TEXT REFERENCES labels(name) ON UPDATE CASCADE ON DELETE SET NULL,
++    horizon    TEXT NOT NULL DEFAULT 'small' CHECK (horizon IN ('small', 'long')),
++    due_date   TEXT,
++    notes      TEXT NOT NULL DEFAULT '',
++    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
++    done_at    TEXT
++);
++
++CREATE TABLE IF NOT EXISTS steps (
++    id         INTEGER PRIMARY KEY AUTOINCREMENT,
++    todo_id    INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
++    pos        INTEGER NOT NULL,
++    text       TEXT NOT NULL,
++    status     TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'started', 'done')),
++    started_at TEXT,
++    done_at    TEXT,
++    due_date   TEXT,
++    UNIQUE (todo_id, pos)
++);
++
++CREATE TABLE IF NOT EXISTS step_notes (
++    id         INTEGER PRIMARY KEY AUTOINCREMENT,
++    step_id    INTEGER NOT NULL REFERENCES steps(id) ON DELETE CASCADE,
++    body       TEXT NOT NULL,
++    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
++);
++
++CREATE TABLE IF NOT EXISTS recurrence (
++    todo_id       INTEGER PRIMARY KEY REFERENCES todos(id) ON DELETE CASCADE,
++    kind          TEXT NOT NULL CHECK (kind IN ('daily', 'weekdays', 'interval')),
++    weekdays      INTEGER NOT NULL DEFAULT 0 CHECK (weekdays BETWEEN 0 AND 127),
++    interval_days INTEGER CHECK (interval_days IS NULL OR interval_days > 0),
++    start_date    TEXT NOT NULL,
++    end_date      TEXT,
++    CHECK (kind <> 'weekdays' OR weekdays > 0),
++    CHECK (kind <> 'interval' OR interval_days IS NOT NULL)
++);
++
++CREATE TABLE IF NOT EXISTS completions (
++    todo_id INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
++    date    TEXT NOT NULL,
++    PRIMARY KEY (todo_id, date)
++) WITHOUT ROWID;
++
++CREATE TABLE IF NOT EXISTS time_log (
++    id      INTEGER PRIMARY KEY AUTOINCREMENT,
++    todo_id INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
++    step_id INTEGER REFERENCES steps(id) ON DELETE SET NULL,
++    date    TEXT NOT NULL,
++    minutes INTEGER NOT NULL CHECK (minutes > 0)
++);
++
++CREATE TABLE IF NOT EXISTS links (
++    id      INTEGER PRIMARY KEY AUTOINCREMENT,
++    todo_id INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
++    label   TEXT NOT NULL,
++    url     TEXT NOT NULL
++);
++
++CREATE TABLE IF NOT EXISTS entries (
++    date       TEXT NOT NULL,
++    label_name TEXT NOT NULL REFERENCES labels(name) ON UPDATE CASCADE ON DELETE CASCADE,
++    msg        TEXT NOT NULL DEFAULT '',
++    PRIMARY KEY (date, label_name)
++);
++
++CREATE INDEX IF NOT EXISTS idx_todos_open_due ON todos(due_date) WHERE done_at IS NULL;
++CREATE INDEX IF NOT EXISTS idx_todos_label    ON todos(label_id);
++CREATE INDEX IF NOT EXISTS idx_steps_todo     ON steps(todo_id, pos);
++CREATE INDEX IF NOT EXISTS idx_steps_due      ON steps(due_date) WHERE status <> 'done';
++CREATE INDEX IF NOT EXISTS idx_time_todo_date ON time_log(todo_id, date);
+diff --git a/database/tables.go b/database/tables.go
+deleted file mode 100644
+index 01ce5d6..0000000
+--- a/database/tables.go
++++ /dev/null
+@@ -1,148 +0,0 @@
+-package database
+-
+-import (
+-	"database/sql"
+-	"fmt"
+-
+-	_ "github.com/glebarez/go-sqlite" // registers the "sqlite" driver
+-)
+-
+-// Open enables foreign keys on every pooled connection (SQLite has them off by default).
+-func Open(path string) (*sql.DB, error) {
+-	return sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+-}
+-
+-// CreateTables runs every table creator in dependency order, then the indexes.
+-func CreateTables(db *sql.DB) error {
+-	steps := []struct {
+-		name string
+-		fn   func(*sql.DB) (sql.Result, error)
+-	}{
+-		{"labels", CreateTableLabels},
+-		{"todos", CreateTableTodos},
+-		{"steps", CreateTableSteps},
+-		{"step_notes", CreateTableStepNotes},
+-		{"recurrence", CreateTableRecurrence},
+-		{"completions", CreateTableCompletions},
+-		{"time_log", CreateTableTimeLog},
+-		{"links", CreateTableLinks},
+-		{"entries", CreateTableEntries},
+-		{"indexes", CreateIndexes},
+-	}
+-	for _, s := range steps {
+-		if _, err := s.fn(db); err != nil {
+-			return fmt.Errorf("create %s: %w", s.name, err)
+-		}
+-	}
+-	return nil
+-}
+-
+-func CreateTableLabels(db *sql.DB) (sql.Result, error) {
+-	return db.Exec(`
+-	CREATE TABLE IF NOT EXISTS labels (
+-		name  TEXT PRIMARY KEY,
+-		color TEXT NOT NULL
+-	);`)
+-}
+-
+-func CreateTableTodos(db *sql.DB) (sql.Result, error) {
+-	return db.Exec(`
+-	CREATE TABLE IF NOT EXISTS todos (
+-		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+-		title      TEXT NOT NULL,
+-		label_id   TEXT REFERENCES labels(name) ON UPDATE CASCADE ON DELETE SET NULL,
+-		horizon    TEXT NOT NULL DEFAULT 'small' CHECK (horizon IN ('small', 'long')),
+-		due_date   TEXT,
+-		notes      TEXT NOT NULL DEFAULT '',
+-		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+-		done_at    TEXT
+-	);`)
+-}
+-
+-func CreateTableSteps(db *sql.DB) (sql.Result, error) {
+-	return db.Exec(`
+-	CREATE TABLE IF NOT EXISTS steps (
+-		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+-		todo_id    INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+-		pos        INTEGER NOT NULL,
+-		text       TEXT NOT NULL,
+-		status     TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'started', 'done')),
+-		started_at TEXT,
+-		done_at    TEXT,
+-		due_date   TEXT,
+-		UNIQUE (todo_id, pos)
+-	);`)
+-}
+-
+-func CreateTableStepNotes(db *sql.DB) (sql.Result, error) {
+-	return db.Exec(`
+-	CREATE TABLE IF NOT EXISTS step_notes (
+-		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+-		step_id    INTEGER NOT NULL REFERENCES steps(id) ON DELETE CASCADE,
+-		body       TEXT NOT NULL,
+-		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+-	);`)
+-}
+-
+-func CreateTableRecurrence(db *sql.DB) (sql.Result, error) {
+-	return db.Exec(`
+-	CREATE TABLE IF NOT EXISTS recurrence (
+-		todo_id       INTEGER PRIMARY KEY REFERENCES todos(id) ON DELETE CASCADE,
+-		kind          TEXT NOT NULL CHECK (kind IN ('daily', 'weekdays', 'interval')),
+-		weekdays      INTEGER NOT NULL DEFAULT 0 CHECK (weekdays BETWEEN 0 AND 127),
+-		interval_days INTEGER CHECK (interval_days IS NULL OR interval_days > 0),
+-		start_date    TEXT NOT NULL,
+-		end_date      TEXT,
+-		CHECK (kind <> 'weekdays' OR weekdays > 0),
+-		CHECK (kind <> 'interval' OR interval_days IS NOT NULL)
+-	);`)
+-}
+-
+-func CreateTableCompletions(db *sql.DB) (sql.Result, error) {
+-	return db.Exec(`
+-	CREATE TABLE IF NOT EXISTS completions (
+-		todo_id INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+-		date    TEXT NOT NULL,
+-		PRIMARY KEY (todo_id, date)
+-	) WITHOUT ROWID;`)
+-}
+-
+-func CreateTableTimeLog(db *sql.DB) (sql.Result, error) {
+-	return db.Exec(`
+-	CREATE TABLE IF NOT EXISTS time_log (
+-		id      INTEGER PRIMARY KEY AUTOINCREMENT,
+-		todo_id INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+-		step_id INTEGER REFERENCES steps(id) ON DELETE SET NULL,
+-		date    TEXT NOT NULL,
+-		minutes INTEGER NOT NULL CHECK (minutes > 0)
+-	);`)
+-}
+-
+-func CreateTableLinks(db *sql.DB) (sql.Result, error) {
+-	return db.Exec(`
+-	CREATE TABLE IF NOT EXISTS links (
+-		id      INTEGER PRIMARY KEY AUTOINCREMENT,
+-		todo_id INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+-		label   TEXT NOT NULL,
+-		url     TEXT NOT NULL
+-	);`)
+-}
+-
+-func CreateTableEntries(db *sql.DB) (sql.Result, error) {
+-	return db.Exec(`
+-	CREATE TABLE IF NOT EXISTS entries (
+-		date       TEXT NOT NULL,
+-		label_name TEXT NOT NULL REFERENCES labels(name) ON UPDATE CASCADE ON DELETE CASCADE,
+-		msg        TEXT NOT NULL DEFAULT '',
+-		PRIMARY KEY (date, label_name)
+-	);`)
+-}
+-
+-func CreateIndexes(db *sql.DB) (sql.Result, error) {
+-	return db.Exec(`
+-	CREATE INDEX IF NOT EXISTS idx_todos_open_due ON todos(due_date) WHERE done_at IS NULL;
+-	CREATE INDEX IF NOT EXISTS idx_todos_label    ON todos(label_id);
+-	CREATE INDEX IF NOT EXISTS idx_steps_todo     ON steps(todo_id, pos);
+-	CREATE INDEX IF NOT EXISTS idx_steps_due      ON steps(due_date) WHERE status <> 'done';
+-	CREATE INDEX IF NOT EXISTS idx_time_todo_date ON time_log(todo_id, date);`)
+-}
+diff --git a/go.mod b/go.mod
+index 41450f0..d455534 100644
+--- a/go.mod
++++ b/go.mod
+@@ -6,6 +6,7 @@ require (
+ 	charm.land/bubbles/v2 v2.2.1
+ 	charm.land/bubbletea/v2 v2.0.9
+ 	charm.land/lipgloss/v2 v2.0.6
++	github.com/charmbracelet/x/ansi v0.11.8
+ 	github.com/glebarez/go-sqlite v1.23.0
+ 	go.yaml.in/yaml/v3 v3.0.5
+ )
+@@ -14,7 +15,6 @@ require (
+ 	github.com/atotto/clipboard v0.1.4 // indirect
+ 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
+ 	github.com/charmbracelet/ultraviolet v0.0.0-20260811164956-006e29f97886 // indirect
+-	github.com/charmbracelet/x/ansi v0.11.8 // indirect
+ 	github.com/charmbracelet/x/term v0.2.2 // indirect
+ 	github.com/charmbracelet/x/termios v0.1.1 // indirect
+ 	github.com/charmbracelet/x/windows v0.2.2 // indirect
+diff --git a/leftbox/chips.go b/leftbox/chips.go
+new file mode 100644
+index 0000000..f691c3e
+--- /dev/null
++++ b/leftbox/chips.go
+@@ -0,0 +1,37 @@
++package leftbox
++
++import (
++	"todo-tui/backend"
++	"todo-tui/ui"
++
++	"charm.land/lipgloss/v2"
++)
++
++// filterLines renders colored label chips wrapped onto as many lines as needed.
++func (l Leftbox) filterLines(width int) []string {
++	chip := func(name string, c backend.HexCode, active bool) string {
++		text := " " + name + " "
++		if active {
++			text = "[" + name + "]"
++		}
++		return lipgloss.NewStyle().Foreground(ui.Color(c)).Bold(active).Render(text)
++	}
++
++	chips := []string{chip("all", l.Style.Theme.Text, l.Filter == "")}
++	for _, id := range l.Labels.Order {
++		chips = append(chips, chip(string(id), l.Labels.Info[id].Color, l.Filter == id))
++	}
++	return ui.WrapJoin(chips, " ", width)
++}
++
++// stepFilter cycles all -> each label in order -> all.
++func (l *Leftbox) stepFilter() {
++	order := append([]backend.LabelID{""}, l.Labels.Order...)
++	for i, id := range order {
++		if id == l.Filter {
++			l.Filter = order[(i+1)%len(order)]
++			return
++		}
++	}
++	l.Filter = ""
++}
+diff --git a/leftbox/commands.go b/leftbox/commands.go
+index 071753c..219c3d8 100644
+--- a/leftbox/commands.go
++++ b/leftbox/commands.go
+@@ -2,31 +2,15 @@ package leftbox
+ 
+ import tea "charm.land/bubbletea/v2"
+ 
+-// SelectTodoMsg: the cursor landed on a todo. The root loads its detail.
+-type SelectTodoMsg struct{ ID int }
+-
+-// ToggleTodoMsg: space was pressed. The root writes it to the database
+-// (done_at for one-time todos, a completions row for recurring ones) and reloads.
+-type ToggleTodoMsg struct {
+-	ID        int
+-	Recurring bool
+-	Done      bool // the state it is in now, before the toggle
+-}
+-
+-func (l Leftbox) selectCmd() tea.Cmd {
+-	r, ok := l.Selected()
+-	if !ok {
+-		return nil
+-	}
+-	return func() tea.Msg { return SelectTodoMsg{ID: r.ID} }
+-}
++// ToggleTodoMsg: space was pressed on a task. The root flips its done state
++// (and, once tasks are persisted, writes it to the database).
++type ToggleTodoMsg struct{ ID int }
+ 
+ func (l Leftbox) toggleCmd() tea.Cmd {
+ 	r, ok := l.Selected()
+ 	if !ok {
+ 		return nil
+ 	}
+-	return func() tea.Msg {
+-		return ToggleTodoMsg{ID: r.ID, Recurring: r.Tab == TabRecurring, Done: r.Done}
+-	}
++	msg := ToggleTodoMsg{ID: r.ID}
++	return func() tea.Msg { return msg }
+ }
+diff --git a/leftbox/layout.go b/leftbox/layout.go
+new file mode 100644
+index 0000000..06b7d4b
+--- /dev/null
++++ b/leftbox/layout.go
+@@ -0,0 +1,162 @@
++package leftbox
++
++import (
++	"fmt"
++	"strings"
++
++	"todo-tui/backend"
++	"todo-tui/ui"
++)
++
++// item is one stop for the cursor: a task row, or the heading of a collapsed
++// group (so a collapsed group can be opened again).
++type item struct {
++	row     Row
++	group   backend.Group
++	heading bool
++	n       int // heading only: tasks hidden in the group
++}
++
++// line is one drawn line of the body. item is the cursor stop it belongs to,
++// or -1 for decoration (headings of open groups, blank lines, step details).
++type line struct {
++	text string
++	item int
++}
++
++var groupNames = map[backend.Group]string{
++	backend.GroupOverdue: "OVERDUE",
++	backend.GroupToday:   "TODAY",
++	backend.GroupWeek:    "THIS WEEK",
++	backend.GroupLater:   "LATER",
++	backend.GroupNoDate:  "NO DATE",
++	backend.GroupDone:    "DONE",
++}
++
++func (l Leftbox) groupName(g backend.Group) string {
++	if l.Tab == backend.KindRecurring && g == backend.GroupLater {
++		return "OTHER DAYS"
++	}
++	return groupNames[g]
++}
++
++// layout builds the cursor stops and the body lines together, so the cursor,
++// the drawing and mouse hover can never disagree about what is where.
++func (l Leftbox) layout() ([]item, []line) {
++	s := l.Style
++	width := s.contentWidth()
++	vis := visible(l.Rows, l.Tab, l.Filter)
++
++	var items []item
++	var lines []line
++	for start := 0; start < len(vis); {
++		g := vis[start].Group
++		end := start
++		for end < len(vis) && vis[end].Group == g {
++			end++
++		}
++		group := vis[start:end]
++		start = end
++
++		if len(lines) > 0 {
++			lines = append(lines, line{item: -1})
++		}
++		if l.Collapsed[g] {
++			items = append(items, item{group: g, heading: true, n: len(group)})
++			lines = append(lines, line{text: l.heading(g, len(group), true, len(items)-1 == l.Cursor), item: len(items) - 1})
++			continue
++		}
++		lines = append(lines, line{text: l.heading(g, 0, false, false), item: -1})
++		for _, r := range group {
++			items = append(items, item{row: r, group: g})
++			idx := len(items) - 1
++			lines = append(lines, line{text: l.renderRow(r, idx == l.Cursor, width), item: idx})
++			if l.Expanded[r.ID] {
++				lines = append(lines, line{text: l.renderDetail(r, width), item: idx})
++			}
++		}
++	}
++	if len(lines) == 0 {
++		lines = []line{{text: ui.Fg(s.Theme.Dim).Render("nothing here"), item: -1}}
++	}
++	return items, lines
++}
++
++func (l Leftbox) heading(g backend.Group, hidden int, collapsed, selected bool) string {
++	c := l.Style.Theme.Dim
++	if g == backend.GroupOverdue {
++		c = l.Style.Theme.Late
++	}
++	if selected {
++		c = l.Style.Theme.Accent
++	}
++	text := l.groupName(g)
++	if collapsed {
++		text = fmt.Sprintf("▸ %s (%d)", text, hidden)
++	}
++	return ui.Fg(c).Bold(true).Render(text)
++}
++
++// frame is everything that is on screen, line by line.
++type frame struct {
++	header []string
++	body   []line // already windowed to bodyH and padded with blanks
++	footer []string
++}
++
++func (l Leftbox) frame() frame {
++	s := l.Style
++	width := s.contentWidth()
++	dim := ui.Fg(s.Theme.Dim)
++
++	header := append([]string{l.tabBar()}, l.filterLines(width)...)
++	header = append(header, "")
++
++	hints := []string{"j/k move", "space done", "f filter", "enter fold group", "e steps", "[/] tabs"}
++	for i := range hints {
++		hints[i] = dim.Render(hints[i])
++	}
++	footer := ui.WrapJoin(hints, dim.Render(" · "), width)
++
++	bodyH := max(0, s.Height-2-len(header)-len(footer))
++	_, lines := l.layout()
++
++	cursorLine := 0
++	for i, ln := range lines {
++		if ln.item == l.Cursor {
++			cursorLine = i
++			break
++		}
++	}
++	start := windowStart(len(lines), cursorLine, bodyH)
++	body := lines[start:min(len(lines), start+bodyH)]
++	for len(body) < bodyH {
++		body = append(body, line{item: -1})
++	}
++	return frame{header: header, body: body, footer: footer}
++}
++
++func (f frame) lines() []string {
++	out := append([]string{}, f.header...)
++	for _, ln := range f.body {
++		out = append(out, ln.text)
++	}
++	return append(out, f.footer...)
++}
++
++// tabBar shows every tab at the same width whether active ([x]) or not ( x ),
++// so the bar doesn't shift when you switch.
++func (l Leftbox) tabBar() string {
++	s := l.Style
++	counts := openCounts(l.Rows, l.Filter)
++	parts := make([]string, 0, backend.KindCount)
++	for i := range backend.KindCount {
++		label := fmt.Sprintf("%s %d", backend.KindNames[i], counts[i])
++		if backend.Kind(i) == l.Tab {
++			parts = append(parts, ui.Fg(s.Theme.Accent).Bold(true).Render("["+label+"]"))
++		} else {
++			parts = append(parts, ui.Fg(s.Theme.Dim).Render(" "+label+" "))
++		}
++	}
++	return strings.Join(parts, " ")
++}
+diff --git a/leftbox/leftbox.go b/leftbox/leftbox.go
+index eb80591..1dc41bb 100644
+--- a/leftbox/leftbox.go
++++ b/leftbox/leftbox.go
+@@ -1,142 +1,97 @@
+ package leftbox
+ 
+ import (
+-	"fmt"
+ 	"strings"
+ 
+ 	"todo-tui/backend"
++	"todo-tui/ui"
+ 
+ 	tea "charm.land/bubbletea/v2"
+ 	"charm.land/lipgloss/v2"
+-	"github.com/charmbracelet/x/ansi"
+ )
+ 
+ type Leftbox struct {
+ 	Style  LeftboxStyle
+ 	Labels backend.Labels
+ 
+-	Rows   []Row
+-	Tab    Tab
+-	Filter backend.LabelID // "" = all labels
+-	Cursor int             // index into the visible rows
+-	Collapsed map[Group]bool
+-	Expanded map[int]bool
++	Rows      []Row
++	Tab       backend.Kind
++	Filter    backend.LabelID // "" = all labels
++	Cursor    int             // index into items(); see layout.go
++	Collapsed map[backend.Group]bool
++	Expanded  map[int]bool // task ID -> steps shown
+ }
+ 
+-func NewLeftbox() Leftbox {
+-	return Leftbox{Style: GetDefaultStyle(), Collapsed: map[Group]bool{}, Expanded: map[int]bool{}}
++func New(theme backend.Theme, labels backend.Labels) Leftbox {
++	return Leftbox{
++		Style:     NewStyle(theme),
++		Labels:    labels,
++		Collapsed: map[backend.Group]bool{},
++		Expanded:  map[int]bool{},
++	}
+ }
+ 
+-func (l Leftbox) Init() tea.Cmd {
+-	return nil
+-}
++func (l Leftbox) Init() tea.Cmd { return nil }
+ 
+-// ReloadState swaps in freshly loaded rows and keeps the cursor on the screen.
++// ReloadState swaps in new rows and keeps the cursor on the same task if it
++// is still there.
+ func (l *Leftbox) ReloadState(rows []Row) {
++	id, had := 0, false
++	if r, ok := l.Selected(); ok {
++		id, had = r.ID, true
++	}
+ 	l.Rows = rows
++	if had {
++		items, _ := l.layout()
++		for i, it := range items {
++			if !it.heading && it.row.ID == id {
++				l.Cursor = i
++				return
++			}
++		}
++	}
+ 	l.clampCursor()
+ }
+ 
++// Selected is the task under the cursor. It is false on a collapsed-group
++// heading or when nothing is listed.
+ func (l Leftbox) Selected() (Row, bool) {
+-	vis := visible(l.Rows, l.Tab, l.Filter)
+-	if l.Cursor < 0 || l.Cursor >= len(vis) {
++	items, _ := l.layout()
++	if l.Cursor < 0 || l.Cursor >= len(items) || items[l.Cursor].heading {
+ 		return Row{}, false
+ 	}
+-	return vis[l.Cursor], true
++	return items[l.Cursor].row, true
+ }
+ 
+-func (l Leftbox) View() tea.View {
++func (l Leftbox) View() string {
+ 	s := l.Style
+-	contentW := s.Width - 4   // border + 1 column of padding on each side
+-	header := append([]string{l.tabBar()}, l.filterLines(contentW)...)
+-	header = append(header, "")
+-	footer := []string{s.ColorDim.ToStyle().Render("j/k move · space complete · f filter"), s.ColorDim.ToStyle().Render("enter collapse group · e expand steps · [/] tabs")}
+-	bodyH := s.Height - 2 - len(header) - len(footer)
+-
+-	vis := visible(l.Rows, l.Tab, l.Filter)
+-
+-	var body []string
+-	cursorLine := 0
+-	prev := Group(-1)
+-	for i, r := range vis {
+-		if r.Group != prev {
+-			if prev != -1 {
+-				body = append(body, "")
+-			}
+-			body = append(body, l.groupHeading(r.Group))
+-			prev = r.Group
+-		}
+-		if l.Collapsed[r.Group] { continue }
+-		if i == l.Cursor {
+-			cursorLine = len(body)
+-		}
+-		marker := "▸ "
+-		if l.Expanded[r.ID] { marker = "▾ " }
+-		body = append(body, marker+l.renderRow(r, i == l.Cursor, contentW-2))
+-		if l.Expanded[r.ID] {
+-			detail := "  No subtasks"
+-			if r.StepsTotal > 0 { detail = fmt.Sprintf("  Progress: %d/%d steps completed", r.StepsDone, r.StepsTotal) }
+-			if r.Schedule != "" { detail += " · " + r.Schedule }
+-			body = append(body, s.ColorDim.ToStyle().Render(ansi.Truncate(detail, contentW, "…")))
+-		}
+-	}
+-	if len(body) == 0 {
+-		body = []string{s.ColorDim.ToStyle().Render("nothing here")}
+-	}
+-	start := windowStart(len(body), cursorLine, bodyH)
+-	body = body[start:min(len(body), start+bodyH)]
++	border := ui.Fg(s.Theme.Border)
+ 
+-	lines := append(header, body...)
+-	lines = append(lines, footer...)
+-
+-	top := backend.GenBorder(
+-		" Tasks ",
+-		s.ColorBorder.ToStyle(),
+-		backend.Top,
+-		s.Width-2,
+-	)
++	top := ui.GenBorder(" Tasks ", border, ui.Top, s.Width-2)
+ 	box := lipgloss.NewStyle().
+ 		Width(s.Width).
+ 		Height(s.Height-1).
+ 		Padding(0, 1).
+-		BorderForeground(lipgloss.Color(string(s.ColorBorder))).
++		BorderForeground(ui.Color(s.Theme.Border)).
+ 		Border(lipgloss.RoundedBorder(), false, true, true, true)
+ 
+-	content := box.Render(strings.Join(lines, "\n"))
+-	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, top, content))
++	content := box.Render(strings.Join(l.frame().lines(), "\n"))
++	return lipgloss.JoinVertical(lipgloss.Left, top, content)
+ }
+ 
+-// HoverAt maps a terminal Y coordinate to a task row in the left panel.
++// HoverAt moves the cursor to the task drawn at terminal row y.
++// It reports whether the cursor moved.
+ func (l *Leftbox) HoverAt(y int) bool {
+-	contentW := l.Style.Width - 4
+-	header := append([]string{l.tabBar()}, l.filterLines(contentW)...)
+-	header = append(header, "")
+-	bodyH := l.Style.Height - 2 - len(header)
+-	vis := visible(l.Rows, l.Tab, l.Filter)
+-
+-	var body []int
+-	prev := Group(-1)
+-	cursorLine := 0
+-	for i, r := range vis {
+-		if r.Group != prev {
+-			if prev != -1 {
+-				body = append(body, -1)
+-			}
+-			body = append(body, -1)
+-			prev = r.Group
+-		}
+-		if i == l.Cursor {
+-			cursorLine = len(body)
+-		}
+-		body = append(body, i)
++	f := l.frame()
++	i := y - (1 + len(f.header)) // 1 for the top border
++	if i < 0 || i >= len(f.body) {
++		return false
+ 	}
+-	start := windowStart(len(body), cursorLine, bodyH)
+-	body = body[start:min(len(body), start+bodyH)]
+-	index := y - (1 + len(header))
+-	if index < 0 || index >= len(body) || body[index] < 0 || body[index] == l.Cursor {
++	it := f.body[i].item
++	if it < 0 || it == l.Cursor {
+ 		return false
+ 	}
+-	l.Cursor = body[index]
++	l.Cursor = it
+ 	return true
+ }
+ 
+@@ -149,188 +104,51 @@ func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
+ 	case "j", "down":
+ 		l.Cursor++
+ 		l.clampCursor()
+-		return l, l.selectCmd()
+ 	case "k", "up":
+ 		l.Cursor--
+ 		l.clampCursor()
+-		return l, l.selectCmd()
+-	case "]", "right_bracket", "close_bracket":
+-		l.Tab = (l.Tab + 1) % tabCount
++	case "]":
++		l.Tab = (l.Tab + 1) % backend.KindCount
+ 		l.Cursor = 0
+-		return l, l.selectCmd()
+-	case "[", "left_bracket", "open_bracket":
+-		l.Tab = (l.Tab + tabCount - 1) % tabCount
++	case "[":
++		l.Tab = (l.Tab + backend.KindCount - 1) % backend.KindCount
+ 		l.Cursor = 0
+-		return l, l.selectCmd()
+ 	case "f":
+ 		l.stepFilter()
+ 		l.Cursor = 0
+-		return l, l.selectCmd()
+-	case " ", "space":
++	case "space", " ":
+ 		return l, l.toggleCmd()
+ 	case "enter":
+-		if r, ok := l.Selected(); ok { if l.Collapsed == nil { l.Collapsed = map[Group]bool{} }; l.Collapsed[r.Group] = !l.Collapsed[r.Group]; l.clampCursor() }
++		l.toggleGroup()
+ 	case "e":
+-		if r, ok := l.Selected(); ok { if l.Expanded == nil { l.Expanded = map[int]bool{} }; l.Expanded[r.ID] = !l.Expanded[r.ID] }
+-	}
+-	return l, nil
+-}
+-
+-// ── drawing ─────────────────────────────────────────────────────────────
+-
+-// tabBar is the title that sits in the top border. Every tab is the same width
+-// whether active ([x]) or not ( x ), so the bar doesn't shift when you switch.
+-func (l Leftbox) tabBar() string {
+-	s := l.Style
+-	counts := openCounts(l.Rows, l.Filter)
+-	parts := make([]string, 0, tabCount)
+-	for i := range tabCount {
+-		label := fmt.Sprintf("%s %d", tabNames[i], counts[i])
+-		if Tab(i) == l.Tab {
+-			parts = append(parts, s.ColorAccent.ToStyle().Bold(true).Render("["+label+"]"))
+-		} else {
+-			parts = append(parts, s.ColorDim.ToStyle().Render(" "+label+" "))
+-		}
+-	}
+-	return strings.Join(parts, " ")
+-}
+-
+-// filterLines renders colored label chips and wraps them onto as many lines as needed.
+-func (l Leftbox) filterLines(width int) []string {
+-	s := l.Style
+-	chips := []string{}
+-	chipWidths := []int{}
+-	add := func(name string, color backend.HexCode, active bool) {
+-		text := " " + name + " "
+-		if active {
+-			text = "[" + name + "]"
++		if r, ok := l.Selected(); ok {
++			l.Expanded[r.ID] = !l.Expanded[r.ID]
+ 		}
+-		chips = append(chips, color.ToStyle().Bold(active).Render(text))
+-		chipWidths = append(chipWidths, lipgloss.Width(text))
+ 	}
+-	add("all", s.ColorText, l.Filter == "")
+-	for _, id := range l.Labels.Order {
+-		add(string(id), l.Labels.Info[id].Color, l.Filter == id)
+-	}
+-	var lines []string
+-	line := ""
+-	lineWidth := 0
+-	for i, chip := range chips {
+-		w := chipWidths[i]
+-		gap := 1
+-		if line == "" { gap = 0 }
+-		if line != "" && lineWidth+gap+w > width {
+-			lines = append(lines, line)
+-			line, lineWidth = chip, w
+-			continue
+-		}
+-		if gap > 0 { line += " "; lineWidth++ }
+-		line += chip
+-		lineWidth += w
+-	}
+-	if line != "" { lines = append(lines, line) }
+-	if len(lines) == 0 { return []string{""} }
+-	return lines
++	return l, nil
+ }
+ 
+-func (l Leftbox) groupHeading(g Group) string {
+-	s := l.Style
+-	name := map[Group]string{
+-		GroupOverdue: "OVERDUE",
+-		GroupToday:   "TODAY",
+-		GroupWeek:    "THIS WEEK",
+-		GroupLater:   "LATER",
+-		GroupNoDate:  "NO DATE",
+-		GroupDone:    "DONE",
+-	}[g]
+-	if l.Tab == TabRecurring && g == GroupLater {
+-		name = "OTHER DAYS"
+-	}
+-	color := s.ColorDim
+-	if g == GroupOverdue {
+-		color = s.ColorLate
+-	}
+-	return color.ToStyle().Bold(true).Render(name)
++func (l *Leftbox) clampCursor() {
++	items, _ := l.layout()
++	l.Cursor = max(0, min(l.Cursor, len(items)-1))
+ }
+ 
+-// renderRow lays out one row as fixed columns:
+-//
+-//	▸ [ ] Title…            tag  ▰▰▱▱ 3/5   2d late
+-func (l Leftbox) renderRow(r Row, selected bool, width int) string {
+-	s := l.Style
+-	dim := s.ColorDim.ToStyle()
+-
+-	marker := " "
+-	if selected {
+-		marker = s.ColorAccent.ToStyle().Bold(true).Render(s.CursorChar)
+-	}
+-	check := s.CheckOpen
+-	if r.Done {
+-		check = s.CheckDone
+-	}
+-
+-	// marker + space + checkbox + space, then 3 single-space gaps between columns.
+-	titleW := width - (1 + 1 + lipgloss.Width(check) + 1) - 3 - s.TagWidth - s.ProgWidth - s.DueWidth
+-
+-	titleStyle := s.ColorText.ToStyle()
+-	switch {
+-	case r.Done:
+-		titleStyle = dim.Strikethrough(true)
+-	case selected:
+-		titleStyle = titleStyle.Bold(true)
+-	}
+-	title := titleStyle.Render(ansi.Truncate(r.Title, titleW, "…"))
+-
+-	tagStyle, accent := dim, s.ColorAccent
+-	if r.Color != "" {
+-		tagStyle, accent = r.Color.ToStyle(), r.Color
+-	}
+-	tag := tagStyle.Render(ansi.Truncate(string(r.LabelID), s.TagWidth, ""))
+-
+-	prog := ""
+-	switch {
+-	case r.StepsTotal > 0:
+-		n := barFill(r.StepsDone, r.StepsTotal, s.BarSegs)
+-		prog = accent.ToStyle().Render(strings.Repeat(s.BarFull, n)) +
+-			dim.Render(strings.Repeat(s.BarEmpty, s.BarSegs-n)+
+-				fmt.Sprintf(" %d/%d", r.StepsDone, r.StepsTotal))
+-	case r.Schedule != "":
+-		prog = dim.Render(ansi.Truncate(r.Schedule, s.ProgWidth, ""))
++// toggleGroup folds or opens the group under the cursor, then puts the cursor
++// on the group's heading (folded) or first task (open).
++func (l *Leftbox) toggleGroup() {
++	items, _ := l.layout()
++	if l.Cursor < 0 || l.Cursor >= len(items) {
++		return
+ 	}
++	g := items[l.Cursor].group
++	l.Collapsed[g] = !l.Collapsed[g]
+ 
+-	due := s.ToneColor(r.DueTone).ToStyle().Render(r.Due)
+-
+-	return strings.Join([]string{
+-		marker + " " + check + " " + padRight(title, titleW),
+-		padRight(tag, s.TagWidth),
+-		padRight(prog, s.ProgWidth),
+-		padLeft(due, s.DueWidth),
+-	}, " ")
+-}
+-
+-// ── small helpers ───────────────────────────────────────────────────────
+-
+-func padRight(s string, w int) string {
+-	return s + strings.Repeat(" ", max(0, w-lipgloss.Width(s)))
+-}
+-
+-func padLeft(s string, w int) string {
+-	return strings.Repeat(" ", max(0, w-lipgloss.Width(s))) + s
+-}
+-
+-func (l *Leftbox) clampCursor() {
+-	n := len(visible(l.Rows, l.Tab, l.Filter))
+-	l.Cursor = max(0, min(l.Cursor, n-1))
+-}
+-
+-// stepFilter cycles all -> each label in order -> all.
+-func (l *Leftbox) stepFilter() {
+-	order := append([]backend.LabelID{""}, l.Labels.Order...)
+-	for i, id := range order {
+-		if id == l.Filter {
+-			l.Filter = order[(i+1)%len(order)]
++	items, _ = l.layout()
++	for i, it := range items {
++		if it.group == g {
++			l.Cursor = i
+ 			return
+ 		}
+ 	}
+-	l.Filter = ""
++	l.clampCursor()
+ }
+diff --git a/leftbox/leftbox_test.go b/leftbox/leftbox_test.go
+new file mode 100644
+index 0000000..b5d5b35
+--- /dev/null
++++ b/leftbox/leftbox_test.go
+@@ -0,0 +1,126 @@
++package leftbox
++
++import (
++	"strings"
++	"testing"
++
++	"todo-tui/backend"
++
++	tea "charm.land/bubbletea/v2"
++	"charm.land/lipgloss/v2"
++	"github.com/charmbracelet/x/ansi"
++)
++
++func rows() []Row {
++	mk := func(id int, g backend.Group, title string) Row {
++		return Row{ID: id, Kind: backend.KindSmall, Group: g, Title: title, LabelID: "uni"}
++	}
++	return []Row{
++		mk(1, backend.GroupOverdue, "a"),
++		mk(2, backend.GroupToday, "b"),
++		mk(3, backend.GroupToday, "c"),
++		mk(4, backend.GroupLater, "d"),
++		{ID: 5, Kind: backend.KindLong, Group: backend.GroupLater, Title: "long"},
++	}
++}
++
++func newBox() Leftbox {
++	labels := backend.Labels{Order: []backend.LabelID{"uni"}, Info: map[backend.LabelID]backend.LabelInfo{"uni": {Color: "#81c8be"}}}
++	l := New(backend.DefaultTheme(), labels)
++	l.ReloadState(rows())
++	return l
++}
++
++func press(l Leftbox, k string) Leftbox {
++	var msg tea.KeyPressMsg
++	switch k {
++	case "enter":
++		msg = tea.KeyPressMsg{Code: tea.KeyEnter}
++	case "space":
++		msg = tea.KeyPressMsg{Code: tea.KeySpace}
++	default:
++		msg = tea.KeyPressMsg{Code: rune(k[0]), Text: k}
++	}
++	l, _ = l.Update(msg)
++	return l
++}
++
++func TestViewIsExactlyPaneSize(t *testing.T) {
++	l := newBox()
++	out := strings.Split(l.View(), "\n")
++	if len(out) != l.Style.Height {
++		t.Fatalf("height %d, want %d", len(out), l.Style.Height)
++	}
++	for i, ln := range out {
++		if w := lipgloss.Width(ln); w != l.Style.Width {
++			t.Fatalf("line %d width %d, want %d: %q", i, w, l.Style.Width, ansi.Strip(ln))
++		}
++	}
++}
++
++func TestHoverMatchesDrawing(t *testing.T) {
++	l := newBox()
++	f := l.frame()
++	for i, ln := range f.body {
++		if ln.item < 0 {
++			continue
++		}
++		l.Cursor = 0
++		y := 1 + len(f.header) + i
++		l.HoverAt(y)
++		items, _ := l.layout()
++		if l.Cursor != ln.item {
++			t.Errorf("y=%d moved cursor to %d, want %d", y, l.Cursor, ln.item)
++		}
++		if !strings.Contains(ansi.Strip(ln.text), items[ln.item].row.Title) && !items[ln.item].heading {
++			t.Errorf("y=%d line %q is not row %q", y, ansi.Strip(ln.text), items[ln.item].row.Title)
++		}
++	}
++}
++
++func TestCollapseKeepsHeadingReachable(t *testing.T) {
++	l := newBox()
++	l = press(l, "j") // on "b" in TODAY
++	l = press(l, "enter")
++	if _, ok := l.Selected(); ok {
++		t.Fatal("cursor should be on the folded heading")
++	}
++	items, _ := l.layout()
++	if !items[l.Cursor].heading || items[l.Cursor].n != 2 {
++		t.Fatalf("want folded TODAY heading with 2 hidden, got %+v", items[l.Cursor])
++	}
++	l = press(l, "enter") // open again
++	if r, ok := l.Selected(); !ok || r.ID != 2 {
++		t.Fatalf("after reopening want first row of TODAY, got %+v %v", r, ok)
++	}
++}
++
++func TestReloadKeepsSelectionByID(t *testing.T) {
++	l := newBox()
++	l = press(l, "j")
++	l = press(l, "j") // row 3
++	re := rows()
++	re[0].Done = true // order is unchanged, but something else moved
++	re = append([]Row{{ID: 9, Kind: backend.KindSmall, Group: backend.GroupOverdue, Title: "new"}}, re...)
++	l.ReloadState(re)
++	if r, _ := l.Selected(); r.ID != 3 {
++		t.Fatalf("selection moved to %d", r.ID)
++	}
++}
++
++func TestTabsFilterAndToggle(t *testing.T) {
++	l := newBox()
++	l = press(l, "]")
++	if r, ok := l.Selected(); !ok || r.ID != 5 {
++		t.Fatalf("long tab selection %+v", r)
++	}
++	l, cmd := l.Update(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
++	if msg, ok := cmd().(ToggleTodoMsg); !ok || msg.ID != 5 {
++		t.Fatalf("toggle msg %+v", msg)
++	}
++	l = press(l, "[")
++	l = press(l, "f") // filter to uni
++	if n := len(visible(l.Rows, l.Tab, l.Filter)); n != 4 {
++		t.Fatalf("uni filter shows %d rows", n)
++	}
++}
+diff --git a/leftbox/leftboxstyle.go b/leftbox/leftboxstyle.go
+index 000c2f4..41ea013 100644
+--- a/leftbox/leftboxstyle.go
++++ b/leftbox/leftboxstyle.go
+@@ -3,7 +3,7 @@ package leftbox
+ import "todo-tui/backend"
+ 
+ type LeftboxStyle struct {
+-	// Outer size including the border, to line up with the other columns.
++	// Outer size including the border, to line up with the other panes.
+ 	Width  int
+ 	Height int
+ 
+@@ -12,22 +12,16 @@ type LeftboxStyle struct {
+ 	ProgWidth int
+ 	DueWidth  int
+ 
+-	CursorChar string
+-	CheckOpen  string
+-	CheckDone  string
+-	BarFull    string
+-	BarEmpty   string
+-	BarSegs    int
+-
+-	ColorBorder backend.HexCode
+-	ColorText   backend.HexCode
+-	ColorDim    backend.HexCode
+-	ColorAccent backend.HexCode
+-	ColorLate   backend.HexCode
+-	ColorSoon   backend.HexCode
++	CheckOpen string
++	CheckDone string
++	BarFull   string
++	BarEmpty  string
++	BarSegs   int
++
++	Theme backend.Theme
+ }
+ 
+-func GetDefaultStyle() LeftboxStyle {
++func NewStyle(theme backend.Theme) LeftboxStyle {
+ 	return LeftboxStyle{
+ 		Width:  50,
+ 		Height: 43,
+@@ -36,28 +30,15 @@ func GetDefaultStyle() LeftboxStyle {
+ 		ProgWidth: 10,
+ 		DueWidth:  7,
+ 
+-		CursorChar: " ",
+-		CheckOpen:  "[ ]",
+-		CheckDone:  "[x]",
+-		BarFull:    "▰",
+-		BarEmpty:   "▱",
+-		BarSegs:    4,
+-
+-		ColorBorder: backend.HexCode("#C6D0F5"),
+-		ColorText:   backend.HexCode("#C6D0F5"),
+-		ColorDim:    backend.HexCode("#939AB7"),
+-		ColorAccent: backend.HexCode("#CA9EE6"),
+-		ColorLate:   backend.HexCode("#E78284"),
+-		ColorSoon:   backend.HexCode("#E5C890"),
+-	}
+-}
++		CheckOpen: "[ ]",
++		CheckDone: "[x]",
++		BarFull:   "▰",
++		BarEmpty:  "▱",
++		BarSegs:   4,
+ 
+-func (s LeftboxStyle) ToneColor(t Tone) backend.HexCode {
+-	switch t {
+-	case ToneLate:
+-		return s.ColorLate
+-	case ToneSoon:
+-		return s.ColorSoon
++		Theme: theme,
+ 	}
+-	return s.ColorDim
+ }
++
++// contentWidth is the room for text: border and one column of padding each side.
++func (s LeftboxStyle) contentWidth() int { return s.Width - 4 }
+diff --git a/leftbox/mock.go b/leftbox/mock.go
+deleted file mode 100644
+index 27a3a57..0000000
+--- a/leftbox/mock.go
++++ /dev/null
+@@ -1,42 +0,0 @@
+-package leftbox
+-
+-import "todo-tui/backend"
+-
+-// MockRows is stand-in data to look at the view before the database is wired in.
+-// Delete once the loader exists.
+-func MockRows() []Row {
+-	col := map[backend.LabelID]backend.HexCode{
+-		"uni": "#81c8be", "work": "#ca9ee6", "gym": "#ef9f76", "app": "#babbf1", "vol": "#f2d5cf",
+-	}
+-	r := func(id int, tab Tab, g Group, title string, lab backend.LabelID, done bool, sd, st int, due string, tone Tone) Row {
+-		return Row{
+-			ID: id, Tab: tab, Group: g, Title: title, LabelID: lab, Color: col[lab],
+-			Done: done, StepsDone: sd, StepsTotal: st, Due: due, DueTone: tone,
+-		}
+-	}
+-	rec := func(id int, g Group, title string, lab backend.LabelID, done bool, sched, due string) Row {
+-		return Row{
+-			ID: id, Tab: TabRecurring, Group: g, Title: title, LabelID: lab, Color: col[lab],
+-			Done: done, Schedule: sched, Due: due,
+-		}
+-	}
+-	return []Row{
+-		r(1, TabSmall, GroupOverdue, "Write lab report", "uni", false, 3, 5, "2d late", ToneLate),
+-		r(3, TabSmall, GroupToday, "Email supervisor", "work", false, 0, 0, "today", ToneSoon),
+-		r(9, TabSmall, GroupNoDate, "Laundry", "", false, 0, 0, "", ToneNormal),
+-		r(4, TabSmall, GroupWeek, "Order gym shoes", "gym", false, 0, 0, "in 6d", ToneNormal),
+-		r(5, TabSmall, GroupLater, "Book dentist", "", false, 0, 0, "in 12d", ToneNormal),
+-		r(6, TabSmall, GroupLater, "Pay tuition", "uni", false, 0, 0, "in 20d", ToneNormal),
+-		r(10, TabSmall, GroupDone, "Renew bus pass", "", true, 0, 0, "", ToneNormal),
+-		r(11, TabSmall, GroupDone, "Return library books", "", true, 0, 0, "", ToneNormal),
+-
+-		r(2, TabLong, GroupWeek, "Apply to co-op", "app", false, 1, 5, "in 3d", ToneNormal),
+-		r(7, TabLong, GroupLater, "Midterm prep", "uni", false, 2, 6, "in 8d", ToneNormal),
+-		r(8, TabLong, GroupLater, "Plan volunteer shifts", "vol", false, 1, 4, "in 21d", ToneNormal),
+-
+-		rec(12, GroupToday, "Gym", "gym", false, "M/W/F", "today"),
+-		rec(13, GroupToday, "Read 20 minutes", "", false, "daily", "today"),
+-		rec(15, GroupLater, "Water plants", "", false, "every 3d", "in 2d"),
+-		rec(14, GroupLater, "Review notes", "uni", false, "Su", "in 5d"),
+-	}
+-}
+diff --git a/leftbox/row.go b/leftbox/row.go
+new file mode 100644
+index 0000000..81c4896
+--- /dev/null
++++ b/leftbox/row.go
+@@ -0,0 +1,105 @@
++package leftbox
++
++import (
++	"fmt"
++	"strings"
++
++	"todo-tui/backend"
++	"todo-tui/ui"
++
++	"charm.land/lipgloss/v2"
++	"github.com/charmbracelet/x/ansi"
++)
++
++// Row is one task, fully resolved by the root (color, group, due text).
++// The view only draws it.
++type Row struct {
++	ID    int
++	Kind  backend.Kind
++	Group backend.Group
++
++	Title   string
++	LabelID backend.LabelID
++	Color   backend.HexCode // label color, "" = no label
++
++	Done bool
++
++	StepsDone  int // the progress bar shows when StepsTotal > 0
++	StepsTotal int
++	Schedule   string // recurring rows: "M/W/F", "daily", "every 3d"
++
++	Due     string // "2d late", "today", "in 6d" ("" = nothing shown)
++	DueTone backend.Tone
++}
++
++// renderRow lays out one row as fixed columns:
++//
++//	▸ [ ] Title…            tag  ▰▰▱▱ 3/5   2d late
++func (l Leftbox) renderRow(r Row, selected bool, width int) string {
++	s := l.Style
++	dim := ui.Fg(s.Theme.Dim)
++
++	chevron := "▸"
++	if l.Expanded[r.ID] {
++		chevron = "▾"
++	}
++	if selected {
++		chevron = ui.Fg(s.Theme.Accent).Bold(true).Render(chevron)
++	} else {
++		chevron = dim.Render(chevron)
++	}
++	check := s.CheckOpen
++	if r.Done {
++		check = s.CheckDone
++	}
++
++	// chevron + space + checkbox + space, then 3 single-space gaps between columns.
++	titleW := width - (1 + 1 + lipgloss.Width(check) + 1) - 3 - s.TagWidth - s.ProgWidth - s.DueWidth
++
++	titleStyle := ui.Fg(s.Theme.Text)
++	switch {
++	case r.Done:
++		titleStyle = dim.Strikethrough(true)
++	case selected:
++		titleStyle = titleStyle.Bold(true)
++	}
++	title := titleStyle.Render(ansi.Truncate(r.Title, titleW, "…"))
++
++	tagStyle, accent := dim, s.Theme.Accent
++	if r.Color != "" {
++		tagStyle, accent = ui.Fg(r.Color), r.Color
++	}
++	tag := tagStyle.Render(ansi.Truncate(string(r.LabelID), s.TagWidth, ""))
++
++	prog := ""
++	switch {
++	case r.StepsTotal > 0:
++		n := ui.BarFill(r.StepsDone, r.StepsTotal, s.BarSegs)
++		prog = ui.Fg(accent).Render(strings.Repeat(s.BarFull, n)) +
++			dim.Render(strings.Repeat(s.BarEmpty, s.BarSegs-n)+
++				fmt.Sprintf(" %d/%d", r.StepsDone, r.StepsTotal))
++	case r.Schedule != "":
++		prog = dim.Render(ansi.Truncate(r.Schedule, s.ProgWidth, ""))
++	}
++
++	due := ui.Fg(s.Theme.ToneColor(r.DueTone)).Render(r.Due)
++
++	return strings.Join([]string{
++		chevron + " " + check + " " + ui.PadRight(title, titleW),
++		ui.PadRight(tag, s.TagWidth),
++		ui.PadRight(prog, s.ProgWidth),
++		ui.PadLeft(due, s.DueWidth),
++	}, " ")
++}
++
++// renderDetail is the extra line under an expanded row.
++func (l Leftbox) renderDetail(r Row, width int) string {
++	detail := "  No steps"
++	if r.StepsTotal > 0 {
++		detail = fmt.Sprintf("  %d/%d steps done", r.StepsDone, r.StepsTotal)
++	}
++	if r.Schedule != "" {
++		detail += " · " + r.Schedule
++	}
++	return ui.Fg(l.Style.Theme.Dim).Render(ansi.Truncate(detail, width, "…"))
++}
+diff --git a/leftbox/util.go b/leftbox/util.go
+index 0f534e5..2abb472 100644
+--- a/leftbox/util.go
++++ b/leftbox/util.go
+@@ -1,124 +1,19 @@
+ package leftbox
+ 
+ import (
+-	"fmt"
+ 	"sort"
+-	"strings"
+ 
+ 	"todo-tui/backend"
+ )
+ 
+-// Pure helpers: no lipgloss / bubbletea in here, so they are easy to test.
+-
+-type Tab int
+-
+-const (
+-	TabSmall Tab = iota
+-	TabLong
+-	TabRecurring
+-	tabCount
+-)
+-
+-var tabNames = [tabCount]string{"small", "long-term", "recurring"}
+-
+-type Group int
+-
+-const (
+-	GroupOverdue Group = iota
+-	GroupToday
+-	GroupWeek
+-	GroupLater
+-	GroupNoDate
+-	GroupDone
+-)
+-
+-type Tone int
+-
+-const (
+-	ToneNormal Tone = iota
+-	ToneSoon
+-	ToneLate
+-)
+-
+-// Row is one todo, fully resolved by whoever loads it (colors, group, due text).
+-// The view only draws it.
+-type Row struct {
+-	ID    int
+-	Tab   Tab
+-	Group Group
+-
+-	Title   string
+-	LabelID backend.LabelID
+-	Color   backend.HexCode // label color, "" = no label
+-
+-	Done bool
+-
+-	StepsDone  int // progress bar shows when StepsTotal > 0
+-	StepsTotal int
+-	Schedule   string // recurring rows: "M/W/F", "daily", "every 3d"
+-
+-	Due     string // "2d late", "today", "in 6d" ("" = nothing shown)
+-	DueTone Tone
+-}
+-
+-// GroupFor decides which heading a one-time todo sits under.
+-// due == nil means the todo has no due date.
+-func GroupFor(due *backend.Date, done bool, today backend.Date) Group {
+-	switch {
+-	case done:
+-		return GroupDone
+-	case due == nil:
+-		return GroupNoDate
+-	}
+-	switch days := today.DaysUntil(*due); {
+-	case days < 0:
+-		return GroupOverdue
+-	case days == 0:
+-		return GroupToday
+-	case days <= 6:
+-		return GroupWeek
+-	default:
+-		return GroupLater
+-	}
+-}
+-
+-// DueInfo is the text for the right-hand column plus how to color it.
+-func DueInfo(due, today backend.Date) (string, Tone) {
+-	days := today.DaysUntil(due)
+-	switch {
+-	case days < 0:
+-		return fmt.Sprintf("%dd late", -days), ToneLate
+-	case days == 0:
+-		return "today", ToneSoon
+-	case days == 1:
+-		return "tmrw", ToneSoon
+-	default:
+-		return fmt.Sprintf("in %dd", days), ToneNormal
+-	}
+-}
+-
+-// ScheduleText turns a recurrence weekday bitmask (bit0 = Sunday) into "M/W/F".
+-// Interval rules are better written by the caller: fmt.Sprintf("every %dd", n).
+-func ScheduleText(mask int) string {
+-	if mask&0x7F == 0x7F {
+-		return "daily"
+-	}
+-	short := [7]string{"Su", "M", "Tu", "W", "Th", "F", "Sa"}
+-	var out []string
+-	for i, s := range short {
+-		if mask&(1<<i) != 0 {
+-			out = append(out, s)
+-		}
+-	}
+-	return strings.Join(out, "/")
+-}
++// Pure helpers: no rendering in here, so they are easy to test.
+ 
+ // visible keeps the rows for this tab (and label filter), ordered by group.
+ // The sort is stable, so the caller's order holds inside each group.
+-func visible(rows []Row, tab Tab, filter backend.LabelID) []Row {
++func visible(rows []Row, tab backend.Kind, filter backend.LabelID) []Row {
+ 	var out []Row
+ 	for _, r := range rows {
+-		if r.Tab != tab || (filter != "" && r.LabelID != filter) {
++		if r.Kind != tab || (filter != "" && r.LabelID != filter) {
+ 			continue
+ 		}
+ 		out = append(out, r)
+@@ -128,34 +23,18 @@ func visible(rows []Row, tab Tab, filter backend.LabelID) []Row {
+ }
+ 
+ // openCounts is the number shown on each tab: rows not done yet.
+-func openCounts(rows []Row, filter backend.LabelID) [tabCount]int {
+-	var n [tabCount]int
++func openCounts(rows []Row, filter backend.LabelID) [backend.KindCount]int {
++	var n [backend.KindCount]int
+ 	for _, r := range rows {
+ 		if r.Done || (filter != "" && r.LabelID != filter) {
+ 			continue
+ 		}
+-		n[r.Tab]++
+-	}
+-	return n
+-}
+-
+-// barFill is how many of segs segments are filled. It never shows an empty bar
+-// once something is done, or a full one before everything is.
+-func barFill(done, total, segs int) int {
+-	if total <= 0 {
+-		return 0
+-	}
+-	n := (done*segs + total/2) / total
+-	if done > 0 && n == 0 {
+-		n = 1
+-	}
+-	if done < total && n == segs {
+-		n = segs - 1
++		n[r.Kind]++
+ 	}
+ 	return n
+ }
+ 
+-// windowStart is the first line to show when body is taller than height,
++// windowStart is the first line to show when the body is taller than height,
+ // keeping the cursor line roughly centered.
+ func windowStart(total, cursorLine, height int) int {
+ 	if total <= height {
+diff --git a/main.go b/main.go
+index b4e428f..c41a7a6 100644
+--- a/main.go
++++ b/main.go
+@@ -34,16 +34,9 @@ func run() error {
+ 		return fmt.Errorf("create tables: %w", err)
+ 	}
+ 
+-	// Seed with the mock calendar until entries can be created in the app.
+-	// n, err := database.LabelCount(db)
+-	// if err != nil {
+-	// 	return err
+-	// }
+-	// if n == 0 {
+-	// 	if err := database.PopulateFromCalendar(db, cfg.Calendar); err != nil {
+-	// 		return err
+-	// 	}
+-	// }
++	if err := database.SyncLabels(db, cfg.Labels); err != nil {
++		return err
++	}
+ 
+ 	_, err = tea.NewProgram(todo.NewTodo(cfg, db)).Run()
+ 	return err
+diff --git a/notes/commands.go b/notes/commands.go
+index 99740d5..d3b3fdf 100644
+--- a/notes/commands.go
++++ b/notes/commands.go
+@@ -1,13 +1,35 @@
+ package notes
+ 
++import backend "todo-tui/backend"
++
++type WriteTextMsg struct {
++	Text string
++}
++
+ func (n *Notes) ToggleFocus() {
+-	if (*n).TextArea.Focused() {
+-		(*n).TextArea.Blur()
++	if n.TextArea.Focused() {
++		n.TextArea.Blur()
+ 	} else {
+-		(*n).TextArea.Focus()
++		n.TextArea.Focus()
+ 	}
+ }
+ 
+-type WriteTextMsg struct {
+-	Text string
++// Typing reports whether the text area has focus, so every key is text.
++func (n Notes) Typing() bool {
++	return n.TextArea.Focused()
++}
++
++func (n *Notes) SetValue(str string) {
++	n.TextArea.SetValue(str)
++}
++
++// SetAccent changes the accent color and regenerates the textarea styles.
++func (n *Notes) SetAccent(c backend.HexCode) {
++	n.Style.ColorAccent = c
++	n.applyStyle()
++}
++
++func (n *Notes) applyStyle() {
++	n.Style.Styles = n.Style.GenStyle()
++	n.TextArea.SetStyles(n.Style.Styles)
+ }
+diff --git a/notes/notes.go b/notes/notes.go
+index 71f9e2a..abce351 100644
+--- a/notes/notes.go
++++ b/notes/notes.go
+@@ -1,13 +1,16 @@
+ package notes
+ 
+ import (
++	backend "todo-tui/backend"
++
+ 	"charm.land/bubbles/v2/textarea"
+ 	tea "charm.land/bubbletea/v2"
+ )
+ 
+-var (
+-	HEIGHT = 25
+-	WIDTH  = 26
++// Size of the text area in cells.
++const (
++	Width  = 26
++	Height = 23
+ )
+ 
+ type Notes struct {
+@@ -15,7 +18,7 @@ type Notes struct {
+ 	Style    NotesStyle
+ }
+ 
+-func NewNotes(initText string) Notes {
++func New(theme backend.Theme) Notes {
+ 	ta := textarea.New()
+ 
+ 	ta.Prompt = ""
+@@ -24,46 +27,27 @@ func NewNotes(initText string) Notes {
+ 	ta.EndOfBufferCharacter = '~'
+ 	ta.KeyMap = textarea.DefaultKeyMap()
+ 
+-	ta.SetValue(initText)
+-	ta.SetWidth(WIDTH)
+-	ta.SetHeight(HEIGHT)
++	ta.SetWidth(Width)
++	ta.SetHeight(Height)
+ 	ta.Blur()
+-	style := GetDefaultStyle()
+-
+-	return Notes{
+-		TextArea: ta,
+-		Style:    style,
+-	}
+-}
+ 
+-func (n Notes) Init() tea.Cmd {
+-	return nil
++	n := Notes{TextArea: ta, Style: NewStyle(theme)}
++	n.applyStyle()
++	return n
+ }
+ 
+-func (n Notes) View() tea.View {
+-	// May need to check the focus status
+-	n.TextArea.SetStyles(n.Style.Styles)
+-	return tea.NewView(n.TextArea.View())
++func (n Notes) View() string {
++	return n.TextArea.View()
+ }
+ 
+ func (n Notes) Update(msg tea.Msg) (Notes, tea.Cmd) {
+-	var cmd tea.Cmd
+-
+-	switch msg := msg.(type) {
+-	case tea.KeyMsg:
+-		switch msg.String() {
+-		case "ctrl+r":
+-			return n, func() tea.Msg {
+-				return WriteTextMsg{
+-					Text: n.TextArea.Value(),
+-				}
+-			}
+-		case "ctrl+c":
+-			return n, tea.Quit
+-		}
++	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+r" {
++		text := n.TextArea.Value()
++		return n, func() tea.Msg { return WriteTextMsg{Text: text} }
+ 	}
+ 
+-	// Delegate all other messages (keystrokes, cursor blink ticks) to the textarea
++	// Everything else (keystrokes, cursor blink ticks) goes to the textarea.
++	var cmd tea.Cmd
+ 	n.TextArea, cmd = n.TextArea.Update(msg)
+ 	return n, cmd
+ }
+diff --git a/notes/notestyles.go b/notes/notestyles.go
+index db8a248..79e31c6 100644
+--- a/notes/notestyles.go
++++ b/notes/notestyles.go
+@@ -2,6 +2,7 @@ package notes
+ 
+ import (
+ 	backend "todo-tui/backend"
++	"todo-tui/ui"
+ 
+ 	"charm.land/bubbles/v2/textarea"
+ 	tea "charm.land/bubbletea/v2"
+@@ -18,7 +19,6 @@ type NotesStyle struct {
+ func (n NotesStyle) GenStyle() textarea.Styles {
+ 	cText := n.ColorText
+ 	cAccent := n.ColorAccent
+-	// cCursor := n.ColorCursor
+ 
+ 	cTextMute, err := cText.MuteColorTarget(backend.HexCode("#303446"), 0.4)
+ 	if err != nil {
+@@ -31,27 +31,27 @@ func (n NotesStyle) GenStyle() textarea.Styles {
+ 
+ 	focused := textarea.StyleState{
+ 		Base:             lipgloss.NewStyle(), // Leave default and then later match the overall color scheme
+-		Text:             cText.ToStyle(),
++		Text:             ui.Fg(cText),
+ 		LineNumber:       lipgloss.NewStyle(), // Not Used
+ 		CursorLineNumber: lipgloss.NewStyle(), // Not Used
+-		CursorLine:       lipgloss.NewStyle().Background(lipgloss.Color(string(cAccentMute))),
+-		EndOfBuffer:      cAccent.ToStyle(),
+-		Placeholder:      cAccent.ToStyle(),
++		CursorLine:       lipgloss.NewStyle().Background(ui.Color(cAccentMute)),
++		EndOfBuffer:      ui.Fg(cAccent),
++		Placeholder:      ui.Fg(cAccent),
+ 		Prompt:           lipgloss.NewStyle(), // Not Used
+ 	}
+ 
+ 	blurred := textarea.StyleState{
+ 		Base:             lipgloss.NewStyle(), // Leave default and then later match the overall color scheme
+-		Text:             cTextMute.ToStyle(),
++		Text:             ui.Fg(cTextMute),
+ 		LineNumber:       lipgloss.NewStyle(), // Not Used
+ 		CursorLineNumber: lipgloss.NewStyle(), // Not Used
+-		CursorLine:       lipgloss.NewStyle().Background(lipgloss.Color(string(cAccentMute))),
+-		EndOfBuffer:      cAccentMute.ToStyle(),
+-		Placeholder:      cAccent.ToStyle(),
++		CursorLine:       lipgloss.NewStyle().Background(ui.Color(cAccentMute)),
++		EndOfBuffer:      ui.Fg(cAccentMute),
++		Placeholder:      ui.Fg(cAccent),
+ 		Prompt:           lipgloss.NewStyle(), // Not Used
+ 	}
+ 	cursor := textarea.CursorStyle{
+-		Color: lipgloss.Color(string(cAccent)),
++		Color: ui.Color(cAccent),
+ 		Shape: tea.CursorBar, // tea.CursorBlock, tea.CursorUnderline
+ 		Blink: false,
+ 		// BlinkSpeed: 500 * time.Millisecond, // Only matters if Blink is true
+@@ -64,17 +64,9 @@ func (n NotesStyle) GenStyle() textarea.Styles {
+ 	}
+ }
+ 
+-func GetDefaultStyle() NotesStyle {
+-	cText := backend.HexCode("#C6D0F5")
+-	cAccent := backend.HexCode("#CA9EE6")
+-
+-	ns := NotesStyle{
+-		Styles: textarea.Styles{},
+-
+-		ColorText:   cText,
+-		ColorAccent: cAccent,
++func NewStyle(theme backend.Theme) NotesStyle {
++	return NotesStyle{
++		ColorText:   theme.Text,
++		ColorAccent: theme.Accent,
+ 	}
+-
+-	ns.Styles = ns.GenStyle()
+-	return ns
+ }
+diff --git a/notes/test.go b/notes/test.go
+deleted file mode 100644
+index b2ef117..0000000
+--- a/notes/test.go
++++ /dev/null
+@@ -1,29 +0,0 @@
+-package notes
+-
+-func TestNotes() Notes {
+-	return NewNotes("")
+-}
+-
+-// func NotesTestPrint() {
+-// 	n := TestNotes()
+-// 	println(n.View())
+-// }
+-//
+-// func NotesTestToggle() {
+-// 	// fmt.Print("\034[H\033[2J") // Clear console ANSI escape sequence
+-// 	n := TestNotes()
+-//
+-// 	for range 10 {
+-// 		// In Focus
+-// 		fmt.Print("\034[H\033[2J")
+-// 		n.TextArea.Focus()
+-// 		println(n.View())
+-// 		time.Sleep(1 * time.Second)
+-//
+-// 		// Not in Focus
+-// 		fmt.Print("\034[H\033[2J")
+-// 		n.TextArea.Blur()
+-// 		println(n.View())
+-// 		time.Sleep(1 * time.Second)
+-// 	}
+-// }
+diff --git a/notes/util.go b/notes/util.go
+deleted file mode 100644
+index f9e66bf..0000000
+--- a/notes/util.go
++++ /dev/null
+@@ -1,13 +0,0 @@
+-package notes
+-
+-import backend "todo-tui/backend"
+-
+-func (n *Notes) ChangeValue(str string) {
+-	n.TextArea.SetValue(str)
+-}
+-
+-// SetAccent changes the accent color and regenerates the textarea styles.
+-func (n *Notes) SetAccent(c backend.HexCode) {
+-	n.Style.ColorAccent = c
+-	n.Style.Styles = n.Style.GenStyle()
+-}
+diff --git a/planner/commands.go b/planner/commands.go
+index bbc3a60..a0bc984 100644
+--- a/planner/commands.go
++++ b/planner/commands.go
+@@ -6,9 +6,28 @@ import (
+ 	tea "charm.land/bubbletea/v2"
+ )
+ 
+-// Command:
+-// Switch between the labels (updates calendar)
+-// Swtich between the months (updates calendar)
++// Messages for the root: "the month/label changed, reload the grid".
++type ChangeCalendarMsg struct {
++	LabelID backend.LabelID
++	NewDate backend.Date
++}
++
++// Messages for the root: "persist this change".
++type SaveEntryMsg struct {
++	Date  backend.Date
++	Label backend.LabelID
++	Msg   string
++}
++
++type RemoveEntryMsg struct {
++	Date  backend.Date
++	Label backend.LabelID
++}
++
++// Every command below builds its message first and returns a closure over that
++// copy. A tea.Cmd runs later on its own goroutine; reading the planner from
++// inside it would race with Update and could see a different date or label.
++
+ func (p *Planner) ToggleFocus() {
+ 	if p.Focus == FocusCalendar {
+ 		p.Focus = FocusNotes
+@@ -18,70 +37,37 @@ func (p *Planner) ToggleFocus() {
+ 	p.NotesModel.ToggleFocus()
+ }
+ 
+-// Messages for the root: "the month/label changed, reload the grid".
+-type ChangeCalendarMsg struct {
+-	LabelID backend.LabelID
+-	NewDate backend.Date
+-}
+-
+ func (p *Planner) UpdateMonth(next bool) tea.Cmd {
+ 	step := -1
+ 	if next {
+ 		step = 1
+ 	}
+-	p.SelectedDate().ChangeDate(0, step, 0)
+-	return func() tea.Msg {
+-		return ChangeCalendarMsg{
+-			*p.SelectedLabel(),
+-			*p.SelectedDate(),
+-		}
+-	}
++	p.CalendarModel.ShiftMonth(step)
++	return p.changeCalendarCmd()
+ }
+ 
+ func (p *Planner) UpdateLabel(next bool) tea.Cmd {
+ 	p.Labels.Step(next)
+ 	p.ApplyLabelColor()
+-	return func() tea.Msg {
+-		return ChangeCalendarMsg{
+-			*p.SelectedLabel(),
+-			*p.SelectedDate(),
+-		}
+-	}
++	return p.changeCalendarCmd()
+ }
+ 
+-// Messages for the root: "persist this change".
+-type SaveEntryMsg struct {
+-	Date  backend.Date
+-	Label backend.LabelID
+-	Msg   string
++func (p Planner) changeCalendarCmd() tea.Cmd {
++	msg := ChangeCalendarMsg{LabelID: p.SelectedLabel(), NewDate: p.SelectedDate()}
++	return func() tea.Msg { return msg }
+ }
+ 
+-type RemoveEntryMsg struct {
+-	Date  backend.Date
+-	Label backend.LabelID
++// saveEntryCmd saves the notes text as the selected day's entry. Saving also marks the day.
++func (p Planner) saveEntryCmd() tea.Cmd {
++	msg := SaveEntryMsg{
++		Date:  p.SelectedDate(),
++		Label: p.SelectedLabel(),
++		Msg:   p.NotesModel.TextArea.Value(),
++	}
++	return func() tea.Msg { return msg }
+ }
+ 
+-// SaveEntry saves the notes text as the selected day's entry (ctrl+r).
+-// Saving also marks the day.
+-// func (p *Planner) SaveEntry() tea.Cmd {
+-// 	if p.Labels.Selected == "" {
+-// 		return nil
+-// 	}
+-// 	msg := SaveEntryMsg{
+-// 		Date:  p.CalendarModel.SelectedDate,
+-// 		Label: p.Labels.Selected,
+-// 		Msg:   p.NotesModel.TextArea.Value(),
+-// 	}
+-// 	return func() tea.Msg { return msg }
+-// }
+-
+-// ToggleEntry marks or unmarks the selected day (x). Marking creates an entry
+-// from the current notes text, unmarking removes the entry.
+-// func (p *Planner) ToggleEntry() tea.Cmd {
+-// 	date := p.CalendarModel.SelectedDate
+-// 	if !p.HasEntry(date) {
+-// 		return p.SaveEntry()
+-// 	}
+-// 	msg := RemoveEntryMsg{Date: date, Label: p.Labels.Selected}
+-// 	return func() tea.Msg { return msg }
+-// }
++func (p Planner) removeEntryCmd() tea.Cmd {
++	msg := RemoveEntryMsg{Date: p.SelectedDate(), Label: p.SelectedLabel()}
++	return func() tea.Msg { return msg }
++}
+diff --git a/planner/planner.go b/planner/planner.go
+index fa346e1..2afc351 100644
+--- a/planner/planner.go
++++ b/planner/planner.go
+@@ -1,11 +1,10 @@
+ package planner
+ 
+ import (
+-	"strings"
+-
+ 	backend "todo-tui/backend"
+ 	"todo-tui/calendar"
+ 	"todo-tui/notes"
++	"todo-tui/ui"
+ 
+ 	tea "charm.land/bubbletea/v2"
+ 	"charm.land/lipgloss/v2"
+@@ -18,7 +17,8 @@ const (
+ 	FocusNotes
+ )
+ 
+-type Entries map[string]string
++// innerWidth is the width between the two border columns.
++const innerWidth = 28
+ 
+ type Planner struct {
+ 	NotesModel    notes.Notes
+@@ -27,177 +27,94 @@ type Planner struct {
+ 
+ 	Focus Focus
+ 
+-	Entries Entries
++	Entries map[string]string // the selected label's notes, by date key
+ 	Labels  backend.Labels
+ }
+ 
+-func NewPlanner(date backend.Date) Planner {
+-	return Planner{
+-		NotesModel:    notes.NewNotes(""),
+-		CalendarModel: calendar.NewCalendar(date),
+-		Style:         GetDefaultStyle(),
+-
+-		Focus: FocusCalendar,
++func New(date backend.Date, theme backend.Theme, labels backend.Labels) Planner {
++	p := Planner{
++		NotesModel:    notes.New(theme),
++		CalendarModel: calendar.New(date, theme),
++		Style:         NewStyle(theme),
++		Focus:         FocusCalendar,
++		Labels:        labels,
+ 	}
++	p.ApplyLabelColor()
++	return p
+ }
+ 
+-// Init asks the root to load the starting month, the same way a month change does.
+-func (p Planner) Init() tea.Cmd {
+-	// d := p.CalendarModel.SelectedDate
+-	// return func() tea.Msg { return UpdateMonthMsg{d} }
+-	return nil
+-}
+-
+-func (p Planner) View() tea.View {
+-	type posn int
+-	const (
+-		top posn = iota
+-		mid
+-		bot
+-	)
+-	width := 28
+-	genBreak := func(text string, style lipgloss.Style, posn posn) string {
+-		text = style.Render(text)
+-
+-		var paddingL, paddingR, left, right string
+-		pad := strings.Repeat("─", max(0, (width-lipgloss.Width(text))/2))
+-		if lipgloss.Width(text)%2 == 1 {
+-			paddingR = "─"
+-		}
+-		paddingL += pad
+-		paddingR += pad
+-
+-		switch posn {
+-		case top:
+-			left = "╭" + paddingL
+-			right = paddingR + "╮"
+-		case mid:
+-			left = "├" + paddingL
+-			right = paddingR + "┤"
+-		case bot:
+-			left = "╰" + paddingL
+-			right = paddingR + "╯"
+-		}
+-
+-		borderStyle := p.Style.BorderColor.ToStyle()
+-		return borderStyle.Render(left) + text + borderStyle.Render(right)
+-	}
++func (p Planner) View() string {
++	border := ui.Fg(p.Style.BorderColor)
+ 
+-	headerFull := genBreak(
+-		p.CalendarModel.SelectedDate.Format(),
+-		p.CalendarModel.GetSelectedColor().ToStyle().Padding(0, 1).Bold(true),
+-		top,
++	header := ui.GenBorder(
++		ui.Fg(p.CalendarModel.GetSelectedColor()).Padding(0, 1).Bold(true).Render(p.CalendarModel.SelectedDate.Format()),
++		border, ui.Top, innerWidth,
+ 	)
+-
+-	calendarBorder := p.Style.BorderColor.ToStyle().
++	calendarBox := border.
+ 		Border(lipgloss.RoundedBorder(), false, true).
+-		Render(p.CalendarModel.View().Content)
+-
+-	footerFull := genBreak(
+-		p.Labels.GetName(),
+-		p.Labels.GetColor().ToStyle().Padding(0, 1).Bold(true),
+-		mid,
++		Render(p.CalendarModel.View())
++	footer := ui.GenBorder(
++		ui.Fg(p.Labels.GetColor()).Padding(0, 1).Bold(true).Render(p.Labels.GetName()),
++		border, ui.Mid, innerWidth,
+ 	)
+-
+-	notesBorder := p.Style.BorderColor.ToStyle().Padding(1, 1).
++	notesBox := border.Padding(1, 1).
+ 		Border(lipgloss.RoundedBorder(), false, true, true, true).
+-		Render(p.NotesModel.View().Content)
+-
+-	complete := lipgloss.JoinVertical(
+-		lipgloss.Left,
+-		headerFull,
+-		calendarBorder,
+-		footerFull,
+-		notesBorder,
+-	)
++		Render(p.NotesModel.View())
+ 
+-	return tea.NewView(complete)
++	return lipgloss.JoinVertical(lipgloss.Left, header, calendarBox, footer, notesBox)
+ }
+ 
+-// Handle on inputs:
+-// ctrl h/j/k/l and r
+-// Then delegate to the submodels (planner/notes)
+-// Read the output and determine if actions are needed
++// Typing reports whether every key press is text for the notes box.
++func (p Planner) Typing() bool {
++	return p.Focus == FocusNotes && p.NotesModel.Typing()
++}
++
++// Update handles the planner's own keys (ctrl+w/h/l/j/k), passes everything
++// else to whichever child has focus, then reacts to what the children report.
+ func (p Planner) Update(msg tea.Msg) (Planner, tea.Cmd) {
+-	if key, ok := msg.(tea.KeyMsg); ok {
+-		switch key.String() {
++	switch m := msg.(type) {
++	case tea.KeyPressMsg:
++		var cmd tea.Cmd
++		switch m.String() {
+ 		case "ctrl+w": // toggle focus between Calendar and Notes
+ 			p.ToggleFocus()
+ 			return p, nil
+ 		case "ctrl+h": // previous label
+-			return p, p.UpdateLabel(false)
++			cmd = p.UpdateLabel(false)
++			return p, cmd
+ 		case "ctrl+l": // next label
+-			return p, p.UpdateLabel(true)
++			cmd = p.UpdateLabel(true)
++			return p, cmd
+ 		case "ctrl+j": // next month
+-			return p, p.UpdateMonth(true)
++			cmd = p.UpdateMonth(true)
++			return p, cmd
+ 		case "ctrl+k": // previous month
+-			return p, p.UpdateMonth(false)
+-		// case "ctrl+r": // save the entry
+-		// 	return p, p.SaveEntry()
+-		// case "x": // mark/unmark the day, only when the calendar has focus
+-		// if p.Focus == FocusCalendar {
+-		// 	return p, p.ToggleEntry()
+-		// }
+-		case "ctrl+c":
+-			return p, tea.Quit
+-		}
+-	}
++			cmd = p.UpdateMonth(false)
++			return p, cmd
+ 
+-	var cmd tea.Cmd // initializes to nil
+-	switch p.Focus {
+-	case FocusCalendar:
+-		p.CalendarModel, cmd = p.CalendarModel.Update(msg)
+-	case FocusNotes:
+-		p.NotesModel, cmd = p.NotesModel.Update(msg)
+-	}
++		}
+ 
+-	// Capture the changes returned by notes or calendar model
+-	switch m := msg.(type) {
++	// What the children reported:
+ 	case calendar.ChangeMonthMsg:
+-		return p, func() tea.Msg {
+-			p.SyncNotes()
+-			return ChangeCalendarMsg{
+-				*p.SelectedLabel(),
+-				*p.SelectedDate(),
+-			}
+-		}
++		return p, p.changeCalendarCmd()
+ 	case calendar.ChangeDateMsg:
+ 		p.SyncNotes()
++		return p, nil
+ 	case calendar.ToggleMarkMsg:
+ 		if m.Status {
+-			return p, func() tea.Msg {
+-				return SaveEntryMsg{
+-					Date:  *p.SelectedDate(),
+-					Label: *p.SelectedLabel(),
+-					Msg:   p.NotesModel.TextArea.Value(),
+-				}
+-			}
+-		} else {
+-			return p, func() tea.Msg {
+-				return RemoveEntryMsg{
+-					Date:  *p.SelectedDate(),
+-					Label: *p.SelectedLabel(),
+-				}
+-			}
++			return p, p.saveEntryCmd()
+ 		}
++		return p, p.removeEntryCmd()
+ 	case notes.WriteTextMsg:
+-		return p, func() tea.Msg {
+-			return SaveEntryMsg{
+-				Date:  *p.SelectedDate(),
+-				Label: *p.SelectedLabel(),
+-				Msg:   p.NotesModel.TextArea.Value(),
+-			}
+-		}
++		return p, p.saveEntryCmd()
+ 	}
+-	return p, cmd
+ 
+-	// The calendar moved on its own (h/j/k/l). If it left the month, ask the
+-	// root to reload the grid, which also refreshes Notes. Otherwise only the
+-	// selected day changed, so show that day's entry.
+-	// if cur := p.CalendarModel.SelectedDate; cur != prev {
+-	// 	if cur.Year != prev.Year || cur.Month != prev.Month {
+-	// 		cmd = tea.Batch(cmd, func() tea.Msg { return UpdateMonthMsg{cur} })
+-	// 	} else {
+-	// 		p.SyncNotes()
+-	// 	}
++	var cmd tea.Cmd
++	switch p.Focus {
++	case FocusCalendar:
++		p.CalendarModel, cmd = p.CalendarModel.Update(msg)
++	case FocusNotes:
++		p.NotesModel, cmd = p.NotesModel.Update(msg)
++	}
++	return p, cmd
+ }
+diff --git a/planner/plannerstyle.go b/planner/plannerstyle.go
+index fce98b4..65ef13e 100644
+--- a/planner/plannerstyle.go
++++ b/planner/plannerstyle.go
+@@ -1,15 +1,11 @@
+ package planner
+ 
+-import (
+-	backend "todo-tui/backend"
+-)
++import backend "todo-tui/backend"
+ 
+ type PlannerStyle struct {
+ 	BorderColor backend.HexCode
+ }
+ 
+-func GetDefaultStyle() PlannerStyle {
+-	return PlannerStyle{
+-		BorderColor: backend.HexCode("#c6d0f5"),
+-	}
++func NewStyle(theme backend.Theme) PlannerStyle {
++	return PlannerStyle{BorderColor: theme.Border}
+ }
+diff --git a/planner/util.go b/planner/util.go
+index c2d1f8e..b904920 100644
+--- a/planner/util.go
++++ b/planner/util.go
+@@ -1,27 +1,13 @@
+ package planner
+ 
+-import (
+-	"todo-tui/backend"
+-	"todo-tui/calendar"
+-)
++import "todo-tui/backend"
+ 
+-// GridStart is the first cell of a 6x7 (Sunday-first) month grid: the Sunday
+-// on or before the 1st of d's month.
+-// func GridStart(d backend.Date) backend.Date {
+-// 	first := d.FirstDay()
+-// 	return first.AddDate(0, 0, -int(first.Weekday()))
+-// }
+-
+-func (p *Planner) SelectedDate() *backend.Date {
+-	return &p.CalendarModel.SelectedDate
+-}
+-
+-func (p *Planner) CalendarState() *[6][7]calendar.Info {
+-	return &p.CalendarModel.State
++func (p Planner) SelectedDate() backend.Date {
++	return p.CalendarModel.SelectedDate
+ }
+ 
+-func (p *Planner) SelectedLabel() *backend.LabelID {
+-	return &p.Labels.Selected
++func (p Planner) SelectedLabel() backend.LabelID {
++	return p.Labels.Selected
+ }
+ 
+ // ApplyLabelColor makes the calendar and notes accents follow the selected label.
+@@ -31,35 +17,21 @@ func (p *Planner) ApplyLabelColor() {
+ 	p.NotesModel.SetAccent(c)
+ }
+ 
+-func (p *Planner) HasEntry(date backend.Date) bool {
++func (p Planner) HasEntry(date backend.Date) bool {
+ 	_, ok := p.Entries[date.Key()]
+ 	return ok
+ }
+ 
+-// Take in the result for entries
+-func (p *Planner) ReloadState(sDate backend.Date, entries map[string]string) {
+-	// Update Calendar state
+-	// Update Notes
++// ReloadState takes freshly loaded entries for the grid starting at start,
++// then refreshes the calendar marks and the notes.
++func (p *Planner) ReloadState(start backend.Date, entries map[string]string) {
+ 	p.Entries = entries
+-	p.UpdateCalendarState(sDate)
++	p.CalendarModel.SetGrid(start, p.HasEntry)
+ 	p.SyncNotes()
+ }
+ 
+-func (p *Planner) UpdateCalendarState(sDate backend.Date) {
+-	state := p.CalendarState()
+-
+-	for row := range state {
+-		for col := range state[row] {
+-			_, ok := p.Entries[sDate.Key()]
+-			state[row][col] = calendar.Info{Date: sDate, IsMarked: ok}
+-			sDate.ChangeDate(0, 0, 1)
+-		}
+-	}
+-}
+-
+ // SyncNotes shows the selected day's entry in Notes. A day with no entry
+ // clears it, which shows the placeholder.
+ func (p *Planner) SyncNotes() {
+-	sel := *p.SelectedDate()
+-	p.NotesModel.ChangeValue(p.Entries[sel.Key()])
++	p.NotesModel.SetValue(p.Entries[p.SelectedDate().Key()])
+ }
+diff --git a/preview/command.go b/preview/command.go
+deleted file mode 100644
+index 94e4bf0..0000000
+--- a/preview/command.go
++++ /dev/null
+@@ -1 +0,0 @@
+-package preview
+diff --git a/preview/preview.go b/preview/preview.go
+index 0c132ab..057ee8f 100644
+--- a/preview/preview.go
++++ b/preview/preview.go
+@@ -5,158 +5,125 @@ import (
+ 	"strings"
+ 
+ 	"todo-tui/backend"
+-	"todo-tui/leftbox"
++	"todo-tui/ui"
+ 
+ 	tea "charm.land/bubbletea/v2"
+ 	"charm.land/lipgloss/v2"
+ )
+ 
+-type Preview struct {
+-	Style    PreviewStyle
+-	Selected leftbox.Row
+-	HasTask  bool
+-}
++// Detail is one task, fully resolved by the root. The preview only draws it.
++type Detail struct {
++	ID    int
++	Title string
++	Done  bool
+ 
+-func NewPreview() Preview {
+-	return Preview{Style: GetDefaultStyle()}
+-}
++	Label      backend.LabelID // "" = unlabelled
++	LabelColor backend.HexCode
+ 
+-func (p *Preview) SetTask(row leftbox.Row, ok bool) {
+-	p.Selected = row
+-	p.HasTask = ok
+-}
++	Schedule string // recurring tasks: "M/W/F", "daily", "every 3d"
++	Due      string // "2d late", "today", "in 6d" ("" = nothing)
++	DueTone  backend.Tone
+ 
+-func (p Preview) Init() tea.Cmd { return nil }
++	StepsDone  int
++	StepsTotal int
++}
+ 
+-func (p Preview) View() tea.View {
+-	const width = 50
+-	const height = 43
+-	innerWidth := width - 4
+-	border := p.Style.BorderColor.ToStyle()
+-
+-	var lines []string
+-	if !p.HasTask {
+-		lines = []string{
+-			border.Bold(true).Render("TASK DETAILS"),
+-			"",
+-			"  Select a task on the left",
+-			"  to inspect its details.",
+-		}
+-	} else {
+-		r := p.Selected
+-		lines = append(lines, border.Bold(true).Render("TASK DETAILS"), "")
+-		lines = append(lines, border.Render("TITLE"))
+-		lines = append(lines, wrapText(r.Title, innerWidth))
+-		lines = append(lines, "")
++type Preview struct {
++	Style  PreviewStyle
++	Detail *Detail // nil = nothing selected
++}
+ 
+-		lines = append(lines, border.Render("STATUS"))
+-		status := "Open"
+-		if r.Done {
+-			status = "Completed"
+-		}
+-		lines = append(lines, "  "+status, "")
++func New(theme backend.Theme) Preview {
++	return Preview{Style: NewStyle(theme)}
++}
+ 
+-		lines = append(lines, border.Render("LABEL"))
+-		label := "Unlabelled"
+-		if r.LabelID != "" {
+-			label = string(r.LabelID)
+-		}
+-		if r.Color != "" {
+-			label = r.Color.ToStyle().Bold(true).Render("  " + label)
+-		} else {
+-			label = "  " + label
+-		}
+-		lines = append(lines, label, "")
++func (p *Preview) SetTask(d *Detail) { p.Detail = d }
+ 
+-		lines = append(lines, border.Render("SCHEDULE / DUE DATE"))
+-		if r.Schedule != "" {
+-			lines = append(lines, "  "+r.Schedule)
+-		}
+-		if r.Due != "" {
+-			dueStyle := backend.HexCode("#939AB7").ToStyle()
+-			if r.DueTone == leftbox.ToneLate {
+-				dueStyle = backend.HexCode("#E78284").ToStyle()
+-			} else if r.DueTone == leftbox.ToneSoon {
+-				dueStyle = backend.HexCode("#E5C890").ToStyle()
+-			}
+-			lines = append(lines, dueStyle.Render("  "+r.Due))
+-		}
+-		if r.Schedule == "" && r.Due == "" {
+-			lines = append(lines, "  No schedule or due date")
+-		}
+-		lines = append(lines, "")
++func (p Preview) Init() tea.Cmd { return nil }
+ 
+-		if r.StepsTotal > 0 {
+-			lines = append(lines, border.Render("PROGRESS"))
+-			lines = append(lines, fmt.Sprintf("  %d of %d steps completed", r.StepsDone, r.StepsTotal))
+-			filled := barFill(r.StepsDone, r.StepsTotal, 20)
+-			lines = append(lines, "  "+backend.HexCode("#CA9EE6").ToStyle().Render(strings.Repeat("━", filled))+backend.HexCode("#939AB7").ToStyle().Render(strings.Repeat("─", 20-filled)))
+-			lines = append(lines, "")
+-		}
++func (p Preview) Update(msg tea.Msg) (Preview, tea.Cmd) { return p, nil }
+ 
+-		lines = append(lines, border.Render("TASK ID"))
+-		lines = append(lines, fmt.Sprintf("  #%d", r.ID))
+-	}
++func (p Preview) View() string {
++	s := p.Style
++	innerW := s.Width - 4
++	rows := s.Height - 2 // inside the border
+ 
+-	for i := range lines {
+-		lines[i] = lipgloss.NewStyle().Width(innerWidth).Render(lines[i])
+-	}
+-	for len(lines) > height-4 {
+-		lines = lines[:len(lines)-1]
++	lines := p.lines(innerW)
++	if len(lines) > rows {
++		lines = append(lines[:rows-1], ui.Fg(s.Theme.Dim).Render("…"))
+ 	}
+-	for len(lines) < height-4 {
++	for len(lines) < rows {
+ 		lines = append(lines, "")
+ 	}
+ 
+-	top := backend.GenBorder(" Task details ", border, backend.Top, width-2)
++	border := ui.Fg(s.Theme.Border)
++	top := ui.GenBorder(" Task details ", border, ui.Top, s.Width-2)
+ 	box := lipgloss.NewStyle().
+-		Width(width).
+-		Height(height-1).
++		Width(s.Width).
++		Height(s.Height-1).
+ 		Padding(0, 1).
+-		BorderForeground(lipgloss.Color(string(p.Style.BorderColor))).
++		BorderForeground(ui.Color(s.Theme.Border)).
+ 		Border(lipgloss.RoundedBorder(), false, true, true, true)
+-	content := box.Render(strings.Join(lines, "\n"))
+-	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, top, content))
++
++	return lipgloss.JoinVertical(lipgloss.Left, top, box.Render(strings.Join(lines, "\n")))
+ }
+ 
+-func wrapText(text string, width int) string {
+-	if text == "" {
+-		return "  (untitled)"
+-	}
+-	words := strings.Fields(text)
+-	if len(words) == 0 {
+-		return "  "
++func (p Preview) lines(width int) []string {
++	t := p.Style.Theme
++	head := ui.Fg(t.Border)
++	dim := ui.Fg(t.Dim)
++
++	d := p.Detail
++	if d == nil {
++		return []string{dim.Render("  Select a task on the left"), dim.Render("  to see its details.")}
+ 	}
+-	var lines []string
+-	line := "  "
+-	for _, word := range words {
+-		if lipgloss.Width(line)+1+lipgloss.Width(word) > width && line != "  " {
+-			lines = append(lines, line)
+-			line = "  " + word
+-		} else if line == "  " {
+-			line += word
+-		} else {
+-			line += " " + word
++
++	var out []string
++	section := func(name string, body ...string) {
++		if len(out) > 0 {
++			out = append(out, "")
+ 		}
++		out = append(out, head.Render(name))
++		out = append(out, body...)
+ 	}
+-	lines = append(lines, line)
+-	return strings.Join(lines, "\n")
+-}
+ 
+-func barFill(done, total, segs int) int {
+-	if total <= 0 {
+-		return 0
++	title := ui.WrapText(d.Title, width, 2)
++	if len(title) == 0 {
++		title = []string{dim.Render("  (untitled)")}
+ 	}
+-	n := (done*segs + total/2) / total
+-	if done > 0 && n == 0 {
+-		n = 1
++	section("TITLE", title...)
++
++	status := "Open"
++	if d.Done {
++		status = "Completed"
+ 	}
+-	if done < total && n == segs {
+-		n = segs - 1
++	section("STATUS", "  "+status)
++
++	label := dim.Render("  Unlabelled")
++	if d.Label != "" {
++		label = ui.Fg(d.LabelColor).Bold(true).Render("  " + string(d.Label))
+ 	}
+-	return n
+-}
++	section("LABEL", label)
+ 
+-func (p Preview) Update(msg tea.Msg) (Preview, tea.Cmd) {
+-	return p, nil
++	var when []string
++	if d.Schedule != "" {
++		when = append(when, "  "+d.Schedule)
++	}
++	if d.Due != "" {
++		when = append(when, ui.Fg(t.ToneColor(d.DueTone)).Render("  "+d.Due))
++	}
++	if len(when) == 0 {
++		when = []string{dim.Render("  No schedule or due date")}
++	}
++	section("SCHEDULE / DUE", when...)
++
++	if d.StepsTotal > 0 {
++		n := ui.BarFill(d.StepsDone, d.StepsTotal, p.Style.BarSegs)
++		bar := ui.Fg(t.Accent).Render(strings.Repeat(p.Style.BarFull, n)) +
++			dim.Render(strings.Repeat(p.Style.BarRest, p.Style.BarSegs-n))
++		section("PROGRESS",
++			fmt.Sprintf("  %d of %d steps completed", d.StepsDone, d.StepsTotal),
++			"  "+bar)
++	}
++	return out
+ }
+diff --git a/preview/previewstyle.go b/preview/previewstyle.go
+index 6731792..436efa5 100644
+--- a/preview/previewstyle.go
++++ b/preview/previewstyle.go
+@@ -3,11 +3,24 @@ package preview
+ import "todo-tui/backend"
+ 
+ type PreviewStyle struct {
+-	BorderColor backend.HexCode
++	// Outer size including the border, to line up with the other panes.
++	Width  int
++	Height int
++
++	BarSegs int
++	BarFull string
++	BarRest string
++
++	Theme backend.Theme
+ }
+ 
+-func GetDefaultStyle() PreviewStyle {
++func NewStyle(theme backend.Theme) PreviewStyle {
+ 	return PreviewStyle{
+-		BorderColor: backend.HexCode("#C6D0F5"),
++		Width:   50,
++		Height:  43,
++		BarSegs: 20,
++		BarFull: "━",
++		BarRest: "─",
++		Theme:   theme,
+ 	}
+ }
+diff --git a/preview/util.go b/preview/util.go
+deleted file mode 100644
+index 94e4bf0..0000000
+--- a/preview/util.go
++++ /dev/null
+@@ -1 +0,0 @@
+-package preview
+diff --git a/todo/commands.go b/todo/commands.go
+index 1c6949a..e098c31 100644
+--- a/todo/commands.go
++++ b/todo/commands.go
+@@ -1,35 +1,60 @@
+ package todo
+ 
+ import (
++	"database/sql"
++
+ 	"todo-tui/backend"
+ 	"todo-tui/database"
++	"todo-tui/planner"
++
++	tea "charm.land/bubbletea/v2"
+ )
+ 
+-func (t *Todo) ReloadPlannerState(lID backend.LabelID, date backend.Date) {
+-	// Start Date is the first Sunday from the first of the month.
+-	// End Date is 41 days after it.
+-	sDate := date
+-	sDate.FirstDay()
+-	sDate.ChangeDate(0, 0, -sDate.Weekday())
+-	eDate := sDate.AddDate(0, 0, 41)
++// Each command runs later on its own goroutine, so it only uses the values
++// passed in and the database, never the model. Results come back as messages.
++
++type plannerLoadedMsg struct {
++	label   backend.LabelID
++	start   backend.Date
++	entries map[string]string
++}
++
++type errMsg struct{ err error }
+ 
+-	entries, err := database.FetchGridEntries(t.db, sDate, eDate, lID)
++// gridStart is the first cell of the calendar grid for the month containing
++// date: the Sunday on or before the 1st. The grid is 42 days long.
++func gridStart(date backend.Date) backend.Date {
++	first := date.FirstDay()
++	return first.AddDate(0, 0, -first.Weekday())
++}
++
++func loadPlanner(db *sql.DB, label backend.LabelID, date backend.Date) tea.Msg {
++	start := gridStart(date)
++	entries, err := database.FetchGridEntries(db, start, start.AddDate(0, 0, 41), label)
+ 	if err != nil {
+-		t.err = err
+-		return
++		return errMsg{err}
+ 	}
+-	t.err = nil
+-	t.plannerModel.ReloadState(sDate, entries)
++	return plannerLoadedMsg{label: label, start: start, entries: entries}
++}
++
++func loadPlannerCmd(db *sql.DB, label backend.LabelID, date backend.Date) tea.Cmd {
++	return func() tea.Msg { return loadPlanner(db, label, date) }
+ }
+ 
+-func (t *Todo) AddEntry(lID backend.LabelID, date backend.Date, msg string) {
+-	if err := database.AddEntry(t.db, date.FormatSQL(), string(lID), msg); err != nil {
+-		t.err = err
++func saveEntryCmd(db *sql.DB, m planner.SaveEntryMsg) tea.Cmd {
++	return func() tea.Msg {
++		if err := database.AddEntry(db, m.Date.FormatSQL(), string(m.Label), m.Msg); err != nil {
++			return errMsg{err}
++		}
++		return loadPlanner(db, m.Label, m.Date)
+ 	}
+ }
+ 
+-func (t *Todo) RemoveEntry(lID backend.LabelID, date backend.Date) {
+-	if err := database.RemoveEntry(t.db, date.FormatSQL(), string(lID)); err != nil {
+-		t.err = err
++func removeEntryCmd(db *sql.DB, m planner.RemoveEntryMsg) tea.Cmd {
++	return func() tea.Msg {
++		if err := database.RemoveEntry(db, m.Date.FormatSQL(), string(m.Label)); err != nil {
++			return errMsg{err}
++		}
++		return loadPlanner(db, m.Label, m.Date)
+ 	}
+ }
+diff --git a/todo/keys.go b/todo/keys.go
+new file mode 100644
+index 0000000..9fabdc0
+--- /dev/null
++++ b/todo/keys.go
+@@ -0,0 +1,39 @@
++package todo
++
++import tea "charm.land/bubbletea/v2"
++
++// typing is true while a pane is capturing text, so global keys must not fire.
++func (t *Todo) typing() bool {
++	return t.focus == FocusPlanner && t.planner.Typing()
++}
++
++// handleKey sends a key to exactly one place: a global key, or the focused pane.
++func (t *Todo) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
++	s := key.String()
++	if s == "ctrl+c" {
++		return t, tea.Quit
++	}
++	if !t.typing() {
++		switch s {
++		case "q":
++			return t, tea.Quit
++		case "tab":
++			if t.focus == FocusTasks {
++				t.focus = FocusPlanner
++			} else {
++				t.focus = FocusTasks
++			}
++			return t, nil
++		}
++	}
++
++	var cmd tea.Cmd
++	switch t.focus {
++	case FocusTasks:
++		t.leftbox, cmd = t.leftbox.Update(key)
++		t.syncPreview()
++	case FocusPlanner:
++		t.planner, cmd = t.planner.Update(key)
++	}
++	return t, cmd
++}
+diff --git a/todo/resolve.go b/todo/resolve.go
+new file mode 100644
+index 0000000..9153cc7
+--- /dev/null
++++ b/todo/resolve.go
+@@ -0,0 +1,48 @@
++package todo
++
++import (
++	"todo-tui/backend"
++	"todo-tui/leftbox"
++	"todo-tui/preview"
++)
++
++// The panes never look up labels or work out due dates themselves. These turn
++// a task into exactly what each pane draws.
++
++func (t *Todo) labelColor(id backend.LabelID) backend.HexCode {
++	return t.labels.Info[id].Color // "" for no label or an unknown one
++}
++
++func (t *Todo) rowFor(task backend.Task) leftbox.Row {
++	due, tone := task.DueInfo(t.today)
++	return leftbox.Row{
++		ID:         task.ID,
++		Kind:       task.Kind,
++		Group:      task.Group(t.today),
++		Title:      task.Title,
++		LabelID:    task.Label,
++		Color:      t.labelColor(task.Label),
++		Done:       task.Done,
++		StepsDone:  task.StepsDone,
++		StepsTotal: task.StepsTotal,
++		Schedule:   task.Schedule,
++		Due:        due,
++		DueTone:    tone,
++	}
++}
++
++func (t *Todo) detailFor(task backend.Task) preview.Detail {
++	due, tone := task.DueInfo(t.today)
++	return preview.Detail{
++		ID:         task.ID,
++		Title:      task.Title,
++		Done:       task.Done,
++		Label:      task.Label,
++		LabelColor: t.labelColor(task.Label),
++		Schedule:   task.Schedule,
++		Due:        due,
++		DueTone:    tone,
++		StepsDone:  task.StepsDone,
++		StepsTotal: task.StepsTotal,
++	}
++}
+diff --git a/todo/todo.go b/todo/todo.go
+index 9018e7d..2a99ee9 100644
+--- a/todo/todo.go
++++ b/todo/todo.go
+@@ -2,117 +2,151 @@ package todo
+ 
+ import (
+ 	"database/sql"
++	"time"
+ 
++	"todo-tui/backend"
+ 	"todo-tui/config"
+ 	"todo-tui/leftbox"
+ 	"todo-tui/planner"
+ 	"todo-tui/preview"
++	"todo-tui/ui"
+ 
+ 	tea "charm.land/bubbletea/v2"
+ 	"charm.land/lipgloss/v2"
+ )
+ 
+-type Todo struct {
+-	db  *sql.DB
+-	cfg config.Config
+-	err error
++// Focus is which pane gets the keys.
++type Focus int
+ 
+-	plannerModel planner.Planner
++const (
++	FocusTasks Focus = iota
++	FocusPlanner
++)
+ 
+-	leftboxModel leftbox.Leftbox
+-	previewModel preview.Preview
++// Todo is the root. It owns all state and does all loading and saving; the
++// panes only draw what the root resolves for them and report what the user did.
++type Todo struct {
++	db    *sql.DB
++	err   error
++	focus Focus
+ 
+-	Style TodoStyle
++	theme  backend.Theme
++	labels backend.Labels
++	today  backend.Date
++	tasks  []backend.Task
++
++	leftbox leftbox.Leftbox
++	preview preview.Preview
++	planner planner.Planner
+ }
+ 
+ func NewTodo(cfg config.Config, db *sql.DB) *Todo {
++	today := backend.NewDate(time.Now())
+ 	t := &Todo{
+-		db:           db,
+-		cfg:          cfg,
+-		plannerModel: cfg.LoadPlannerModel(),
+-		leftboxModel: cfg.LoadLeftboxModel(),
+-		previewModel: cfg.LoadPreviewModel(),
+-	}
+-	if row, ok := t.leftboxModel.Selected(); ok {
+-		t.previewModel.SetTask(row, true)
++		db:      db,
++		theme:   cfg.Colors,
++		labels:  cfg.Labels,
++		today:   today,
++		tasks:   config.MockTasks(today),
++		leftbox: leftbox.New(cfg.Colors, cfg.Labels),
++		preview: preview.New(cfg.Colors),
++		planner: planner.New(today, cfg.Colors, cfg.Labels),
+ 	}
++	t.rebuildRows()
+ 	return t
+ }
+ 
+ func (t *Todo) Init() tea.Cmd {
+-	return func() tea.Msg {
+-		return planner.ChangeCalendarMsg{
+-			LabelID: *t.plannerModel.SelectedLabel(),
+-			NewDate: *t.plannerModel.SelectedDate(),
+-		}
+-	}
++	return loadPlannerCmd(t.db, t.planner.SelectedLabel(), t.planner.SelectedDate())
+ }
+ 
+ func (t *Todo) View() tea.View {
+-	left := t.leftboxModel.View().Content
+-	middle := t.previewModel.View().Content
+-	right := t.plannerModel.View().Content
+-	combined := lipgloss.JoinHorizontal(lipgloss.Top, left, middle, right)
+-	view := tea.NewView(combined)
+-	view.MouseMode = tea.MouseModeAllMotion
+-	return view
++	panes := lipgloss.JoinHorizontal(lipgloss.Top,
++		t.leftbox.View(), t.preview.View(), t.planner.View())
++	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, panes, t.statusLine()))
++	v.MouseMode = tea.MouseModeAllMotion
++	return v
++}
++
++func (t *Todo) statusLine() string {
++	if t.err != nil {
++		return ui.Fg(t.theme.Late).Render("error: " + t.err.Error())
++	}
++	hint := "tab: tasks"
++	if t.focus == FocusTasks {
++		hint = "tab: planner"
++	}
++	return ui.Fg(t.theme.Dim).Render(hint + " · q quit")
+ }
+ 
+ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+ 	switch m := msg.(type) {
++	case tea.KeyPressMsg:
++		return t.handleKey(m)
++
+ 	case tea.MouseMotionMsg:
+-		if m.X < t.leftboxModel.Style.Width && t.leftboxModel.HoverAt(m.Y) {
+-			if row, ok := t.leftboxModel.Selected(); ok {
+-				t.previewModel.SetTask(row, true)
+-			}
++		if m.X < t.leftbox.Style.Width && t.leftbox.HoverAt(m.Y) {
++			t.syncPreview()
+ 		}
+ 		return t, nil
++
+ 	case leftbox.ToggleTodoMsg:
+-		// Task rows are currently held in the in-memory model, so toggle their
+-		// state there until the task persistence layer is connected.
+-		for i := range t.leftboxModel.Rows {
+-			if t.leftboxModel.Rows[i].ID == m.ID {
+-				t.leftboxModel.Rows[i].Done = !t.leftboxModel.Rows[i].Done
++		for i := range t.tasks {
++			if t.tasks[i].ID == m.ID {
++				t.tasks[i].Done = !t.tasks[i].Done
+ 				break
+ 			}
+ 		}
+-		if row, ok := t.leftboxModel.Selected(); ok {
+-			t.previewModel.SetTask(row, true)
+-		}
+-		return t, nil
+-	case leftbox.SelectTodoMsg:
+-		if row, ok := t.leftboxModel.Selected(); ok {
+-			t.previewModel.SetTask(row, true)
+-		}
++		t.rebuildRows()
+ 		return t, nil
++
+ 	case planner.ChangeCalendarMsg:
+-		t.ReloadPlannerState(m.LabelID, m.NewDate)
+-		return t, nil
++		return t, loadPlannerCmd(t.db, m.LabelID, m.NewDate)
+ 	case planner.SaveEntryMsg:
+-		t.AddEntry(m.Label, m.Date, m.Msg)
+-		t.ReloadPlannerState(m.Label, m.Date)
+-		return t, nil
++		return t, saveEntryCmd(t.db, m)
+ 	case planner.RemoveEntryMsg:
+-		t.RemoveEntry(m.Label, m.Date)
+-		t.ReloadPlannerState(m.Label, m.Date)
+-		return t, nil
+-	}
++		return t, removeEntryCmd(t.db, m)
+ 
+-	if key, ok := msg.(tea.KeyPressMsg); ok {
+-		switch key.String() {
+-		case "j", "down", "k", "up", "[", "]", "left_bracket", "right_bracket", "open_bracket", "close_bracket", " ", "space", "f", "enter", "e":
+-			var cmd tea.Cmd
+-			t.leftboxModel, cmd = t.leftboxModel.Update(msg)
+-			if row, ok := t.leftboxModel.Selected(); ok {
+-				t.previewModel.SetTask(row, true)
+-			} else {
+-				t.previewModel.SetTask(leftbox.Row{}, false)
+-			}
+-			return t, cmd
++	case plannerLoadedMsg:
++		// A slow load can finish after the user has moved on; drop it then.
++		if m.label == t.planner.SelectedLabel() && m.start == gridStart(t.planner.SelectedDate()) {
++			t.err = nil
++			t.planner.ReloadState(m.start, m.entries)
+ 		}
++		return t, nil
++	case errMsg:
++		t.err = m.err
++		return t, nil
+ 	}
+ 
++	// Everything else (cursor blink ticks, ...) belongs to the planner.
+ 	var cmd tea.Cmd
+-	t.plannerModel, cmd = t.plannerModel.Update(msg)
++	t.planner, cmd = t.planner.Update(msg)
+ 	return t, cmd
+ }
++
++// rebuildRows resolves the tasks for the list and keeps the preview in step.
++func (t *Todo) rebuildRows() {
++	rows := make([]leftbox.Row, len(t.tasks))
++	for i, task := range t.tasks {
++		rows[i] = t.rowFor(task)
++	}
++	t.leftbox.ReloadState(rows)
++	t.syncPreview()
++}
++
++func (t *Todo) syncPreview() {
++	r, ok := t.leftbox.Selected()
++	if !ok {
++		t.preview.SetTask(nil)
++		return
++	}
++	for _, task := range t.tasks {
++		if task.ID == r.ID {
++			d := t.detailFor(task)
++			t.preview.SetTask(&d)
++			return
++		}
++	}
++	t.preview.SetTask(nil)
++}
+diff --git a/todo/todo_test.go b/todo/todo_test.go
+new file mode 100644
+index 0000000..9d3ad36
+--- /dev/null
++++ b/todo/todo_test.go
+@@ -0,0 +1,90 @@
++package todo
++
++import (
++	"strings"
++	"testing"
++
++	"todo-tui/backend"
++	"todo-tui/config"
++
++	tea "charm.land/bubbletea/v2"
++	"charm.land/lipgloss/v2"
++)
++
++func newTodo(t *testing.T) *Todo {
++	t.Helper()
++	cfg := config.Config{
++		Colors: backend.DefaultTheme(),
++		Labels: backend.Labels{
++			Selected: "uni",
++			Order:    []backend.LabelID{"uni", "work"},
++			Info: map[backend.LabelID]backend.LabelInfo{
++				"uni":  {Name: "University", Color: "#81c8be"},
++				"work": {Name: "Work", Color: "#ca9ee6"},
++			},
++		},
++	}
++	return NewTodo(cfg, nil)
++}
++
++func key(t *Todo, k string) {
++	var m tea.KeyPressMsg
++	switch k {
++	case "tab":
++		m = tea.KeyPressMsg{Code: tea.KeyTab}
++	default:
++		m = tea.KeyPressMsg{Code: rune(k[0]), Text: k}
++	}
++	t.Update(m)
++}
++
++func TestKeysGoToFocusedPaneOnly(t *testing.T) {
++	td := newTodo(t)
++	before := td.leftbox.Cursor
++	key(td, "j")
++	if td.leftbox.Cursor != before+1 {
++		t.Fatal("j should move the task cursor while tasks are focused")
++	}
++
++	key(td, "tab")
++	if td.focus != FocusPlanner {
++		t.Fatal("tab should focus the planner")
++	}
++	c := td.leftbox.Cursor
++	key(td, "j")
++	if td.leftbox.Cursor != c {
++		t.Fatal("j must not reach the task list while the planner is focused")
++	}
++}
++
++func TestPreviewFollowsCursor(t *testing.T) {
++	td := newTodo(t)
++	first := td.preview.Detail.ID
++	key(td, "j")
++	if td.preview.Detail == nil || td.preview.Detail.ID == first {
++		t.Fatal("preview should show the newly selected task")
++	}
++}
++
++func TestPaneHeightsMatch(t *testing.T) {
++	td := newTodo(t)
++	want := td.leftbox.Style.Height
++	for name, v := range map[string]string{
++		"leftbox": td.leftbox.View(), "preview": td.preview.View(), "planner": td.planner.View(),
++	} {
++		if h := lipgloss.Height(v); h != want {
++			t.Errorf("%s is %d rows, want %d", name, h, want)
++		}
++	}
++	if w := lipgloss.Width(strings.Split(td.View().Content, "\n")[0]); w != 130 {
++		t.Errorf("total width %d, want 130", w)
++	}
++}
++
++func TestStaleLoadIsIgnored(t *testing.T) {
++	td := newTodo(t)
++	td.Update(plannerLoadedMsg{label: "work", start: gridStart(td.planner.SelectedDate()), entries: map[string]string{"x": "y"}})
++	if len(td.planner.Entries) != 0 {
++		t.Fatal("a result for another label must be dropped")
++	}
++}
+diff --git a/todo/todostyle.go b/todo/todostyle.go
+deleted file mode 100644
+index 4729396..0000000
+--- a/todo/todostyle.go
++++ /dev/null
+@@ -1,3 +0,0 @@
+-package todo
+-
+-type TodoStyle struct{}
+diff --git a/todo/util.go b/todo/util.go
+deleted file mode 100644
+index 6f2363e..0000000
+--- a/todo/util.go
++++ /dev/null
+@@ -1 +0,0 @@
+-package todo
+diff --git a/ui/ui.go b/ui/ui.go
+new file mode 100644
+index 0000000..3ea6f97
+--- /dev/null
++++ b/ui/ui.go
+@@ -0,0 +1,119 @@
++// Package ui holds the small rendering helpers every pane shares.
++package ui
++
++import (
++	"image/color"
++	"strings"
++
++	"todo-tui/backend"
++
++	"charm.land/lipgloss/v2"
++)
++
++// Fg is a style with only the foreground set.
++func Fg(c backend.HexCode) lipgloss.Style {
++	return lipgloss.NewStyle().Foreground(Color(c))
++}
++
++func Color(c backend.HexCode) color.Color {
++	return lipgloss.Color(string(c))
++}
++
++type Posn int
++
++const (
++	Top Posn = iota
++	Mid
++	Bot
++)
++
++// GenBorder draws a horizontal border line with text centered in it:
++//
++//	╭──── text ────╮
++//
++// width is the inner width (without the two corners). Pass text already
++// styled, and a borderStyle for the line itself.
++func GenBorder(text string, borderStyle lipgloss.Style, posn Posn, width int) string {
++	tw := lipgloss.Width(text)
++	pad := max(0, (width-tw)/2)
++	left := strings.Repeat("─", pad)
++	right := strings.Repeat("─", pad+tw%2) // an odd-width text gets the spare dash on the right
++
++	switch posn {
++	case Top:
++		left, right = "╭"+left, right+"╮"
++	case Mid:
++		left, right = "├"+left, right+"┤"
++	case Bot:
++		left, right = "╰"+left, right+"╯"
++	}
++	return borderStyle.Render(left) + text + borderStyle.Render(right)
++}
++
++func PadRight(s string, w int) string {
++	return s + strings.Repeat(" ", max(0, w-lipgloss.Width(s)))
++}
++
++func PadLeft(s string, w int) string {
++	return strings.Repeat(" ", max(0, w-lipgloss.Width(s))) + s
++}
++
++// BarFill is how many of segs segments to fill. It never shows an empty bar
++// once something is done, or a full one before everything is.
++func BarFill(done, total, segs int) int {
++	if total <= 0 {
++		return 0
++	}
++	n := (done*segs + total/2) / total
++	if done > 0 && n == 0 {
++		n = 1
++	}
++	if done < total && n == segs {
++		n = segs - 1
++	}
++	return n
++}
++
++// WrapJoin joins parts with sep and breaks the result into lines of at most width.
++func WrapJoin(parts []string, sep string, width int) []string {
++	var lines []string
++	line := ""
++	for _, p := range parts {
++		switch {
++		case line == "":
++			line = p
++		case lipgloss.Width(line)+lipgloss.Width(sep)+lipgloss.Width(p) <= width:
++			line += sep + p
++		default:
++			lines = append(lines, line)
++			line = p
++		}
++	}
++	if line != "" {
++		lines = append(lines, line)
++	}
++	return lines
++}
++
++// WrapText breaks text on spaces into lines of at most width,
++// indenting every line by indent spaces. Words longer than a line are left whole.
++func WrapText(text string, width, indent int) []string {
++	pad := strings.Repeat(" ", indent)
++	var lines []string
++	line := ""
++	for _, word := range strings.Fields(text) {
++		switch {
++		case line == "":
++			line = word
++		case indent+lipgloss.Width(line)+1+lipgloss.Width(word) <= width:
++			line += " " + word
++		default:
++			lines = append(lines, pad+line)
++			line = word
++		}
++	}
++	if line != "" {
++		lines = append(lines, pad+line)
++	}
++	return lines
++}
+diff --git a/ui/ui_test.go b/ui/ui_test.go
+new file mode 100644
+index 0000000..0511ab4
+--- /dev/null
++++ b/ui/ui_test.go
+@@ -0,0 +1,40 @@
++package ui
++
++import (
++	"strings"
++	"testing"
++
++	"charm.land/lipgloss/v2"
++)
++
++func TestBarFill(t *testing.T) {
++	for _, c := range []struct{ d, t, want int }{
++		{0, 5, 0}, {1, 5, 1}, {3, 5, 2}, {4, 5, 3}, {5, 5, 4}, {1, 40, 1}, {2, 6, 1}, {0, 0, 0},
++	} {
++		if got := BarFill(c.d, c.t, 4); got != c.want {
++			t.Errorf("BarFill(%d,%d)=%d want %d", c.d, c.t, got, c.want)
++		}
++	}
++}
++
++func TestGenBorderWidth(t *testing.T) {
++	plain := lipgloss.NewStyle()
++	for _, text := range []string{" Tasks ", "[small 4]  long-term 2   recurring 3", "x", ""} {
++		for _, posn := range []Posn{Top, Mid, Bot} {
++			if got := lipgloss.Width(GenBorder(text, plain, posn, 48)); got != 50 {
++				t.Errorf("GenBorder(%q) width = %d, want 50", text, got)
++			}
++		}
++	}
++}
++
++func TestWrap(t *testing.T) {
++	got := WrapJoin([]string{"aa", "bb", "cc", "dd"}, " · ", 9)
++	if len(got) != 2 || got[0] != "aa · bb" || got[1] != "cc · dd" {
++		t.Errorf("WrapJoin = %q", got)
++	}
++	lines := WrapText("one two three four", 12, 2)
++	if strings.Join(lines, "|") != "  one two|  three four" {
++		t.Errorf("WrapText = %q", lines)
++	}
++}
