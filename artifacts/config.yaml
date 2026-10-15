@@ -1,4 +1,4 @@
-# -- Calendar --
+# Panel dimensions are outer terminal-cell sizes, including borders.\nlayout:\n  tasks:\n    width: 50\n    height: 43\n  preview:\n    width: 50\n    height: 43\n  editor:\n    width: 50\n    height: 43\n\n# -- Calendar --
 # Colors: Weekend, Weekday, Accent
 #
 # -- Notes --
