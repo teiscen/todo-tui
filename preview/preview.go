@@ -45,8 +45,8 @@ func (p Preview) View() tea.View {
 	if p.Form != nil {
 		return p.Form.View()
 	}
-	const width = 50
-	const height = 43
+	width := p.Style.Width
+	height := p.Style.Height
 	innerWidth := width - 4
 	border := p.Style.BorderColor.ToStyle()
 
