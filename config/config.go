@@ -19,6 +19,11 @@ import (
 // Calendar is being loaded with MockCalendar
 // until sql representation is finished.
 // Once done: Change the way labels is being initialized
+const (
+	defaultPanelWidth = 50
+	defaultPanelHeight = 43
+)
+
 type Config struct {
 	Layout LayoutConfig `yaml:"layout"`
 	Colors struct {
@@ -45,10 +50,10 @@ type PanelSize struct {
 }
 
 func (c *Config) setLayoutDefaults() {
-	if c.Layout.Tasks.Width <= 0 { c.Layout.Tasks.Width = 50 }
-	if c.Layout.Tasks.Height <= 0 { c.Layout.Tasks.Height = 43 }
-	if c.Layout.Preview.Width <= 0 { c.Layout.Preview.Width = 50 }
-	if c.Layout.Preview.Height <= 0 { c.Layout.Preview.Height = 43 }
+	if c.Layout.Tasks.Width <= 0 { c.Layout.Tasks.Width = defaultPanelWidth }
+	if c.Layout.Tasks.Height <= 0 { c.Layout.Tasks.Height = defaultPanelHeight }
+	if c.Layout.Preview.Width <= 0 { c.Layout.Preview.Width = defaultPanelWidth }
+	if c.Layout.Preview.Height <= 0 { c.Layout.Preview.Height = defaultPanelHeight }
 	if c.Layout.Editor.Width <= 0 { c.Layout.Editor.Width = c.Layout.Preview.Width }
 	if c.Layout.Editor.Height <= 0 { c.Layout.Editor.Height = c.Layout.Preview.Height }
 }
