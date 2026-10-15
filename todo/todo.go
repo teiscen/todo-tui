@@ -224,6 +224,7 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // beginAdd opens a blank form, defaulting to the currently selected label.
 func (t *Todo) beginAdd() {
+	t.focus = PanePreview
 	task := database.Task{
 		Horizon: "small",
 		LabelID: sql.NullString{
@@ -250,6 +251,7 @@ func (t *Todo) beginEdit() {
 	}
 	for _, task := range tasks {
 		if task.ID == row.ID {
+			t.focus = PanePreview
 			t.form.Begin(task, true)
 			t.formActive = true
 			t.previewModel.SetForm(&t.form)
