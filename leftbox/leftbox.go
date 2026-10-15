@@ -41,11 +41,23 @@ func (l *Leftbox) ReloadState(rows []Row) {
 
 // Selected returns the row at Cursor after applying the active tab and label filter.
 func (l Leftbox) Selected() (Row, bool) {
-	vis := visible(l.Rows, l.Tab, l.Filter)
-	if l.Cursor < 0 || l.Cursor >= len(vis) {
+	rows := l.selectableRows()
+	if l.Cursor < 0 || l.Cursor >= len(rows) {
 		return Row{}, false
 	}
-	return vis[l.Cursor], true
+	return rows[l.Cursor], true
+}
+
+// selectableRows excludes tasks hidden inside collapsed groups.
+func (l Leftbox) selectableRows() []Row {
+	rows := visible(l.Rows, l.Tab, l.Filter)
+	out := make([]Row, 0, len(rows))
+	for _, row := range rows {
+		if !l.Collapsed[row.Group] {
+			out = append(out, row)
+		}
+	}
+	return out
 }
 
 // View renders the tab/filter header, grouped task rows, and keyboard hints.
@@ -61,8 +73,9 @@ func (l Leftbox) View() tea.View {
 
 	var body []string
 	cursorLine := 0
+	selectableIndex := 0
 	prev := Group(-1)
-	for i, r := range vis {
+	for _, r := range vis {
 		if r.Group != prev {
 			if prev != -1 {
 				body = append(body, "")
@@ -70,13 +83,16 @@ func (l Leftbox) View() tea.View {
 			body = append(body, l.groupHeading(r.Group, vis))
 			prev = r.Group
 		}
-		if l.Collapsed[r.Group] { continue }
-		if i == l.Cursor {
+		if l.Collapsed[r.Group] {
+			continue
+		}
+		if selectableIndex == l.Cursor {
 			cursorLine = len(body)
 		}
 		marker := "▸ "
 		if l.Expanded[r.ID] { marker = "▾ " }
-		body = append(body, marker+l.renderRow(r, i == l.Cursor, contentW-2))
+		body = append(body, marker+l.renderRow(r, selectableIndex == l.Cursor, contentW-2))
+		selectableIndex++
 		if l.Expanded[r.ID] {
 			detail := "  No subtasks"
 			if r.StepsTotal > 0 { detail = fmt.Sprintf("  Progress: %d/%d steps completed", r.StepsDone, r.StepsTotal) }
@@ -121,7 +137,8 @@ func (l *Leftbox) HoverAt(y int) bool {
 	var body []int
 	prev := Group(-1)
 	cursorLine := 0
-	for i, r := range vis {
+	selectableIndex := 0
+	for _, r := range vis {
 		if r.Group != prev {
 			if prev != -1 {
 				body = append(body, -1)
@@ -129,10 +146,14 @@ func (l *Leftbox) HoverAt(y int) bool {
 			body = append(body, -1)
 			prev = r.Group
 		}
-		if i == l.Cursor {
+		if l.Collapsed[r.Group] {
+			continue
+		}
+		if selectableIndex == l.Cursor {
 			cursorLine = len(body)
 		}
-		body = append(body, i)
+		body = append(body, selectableIndex)
+		selectableIndex++
 	}
 	start := windowStart(len(body), cursorLine, bodyH)
 	body = body[start:min(len(body), start+bodyH)]
@@ -183,6 +204,19 @@ func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 		if r, ok := l.Selected(); ok { if l.Expanded == nil { l.Expanded = map[int]bool{} }; l.Expanded[r.ID] = !l.Expanded[r.ID] }
 	}
 	return l, nil
+}
+
+// toggleSelectedGroup expands or collapses the selected task's group.
+func (l *Leftbox) toggleSelectedGroup() {
+	row, ok := l.Selected()
+	if !ok {
+		return
+	}
+	if l.Collapsed == nil {
+		l.Collapsed = make(map[Group]bool)
+	}
+	l.Collapsed[row.Group] = !l.Collapsed[row.Group]
+	l.clampCursor()
 }
 
 // ── drawing ─────────────────────────────────────────────────────────────
@@ -336,7 +370,7 @@ func padLeft(s string, w int) string {
 
 // clampCursor keeps selection within the currently visible row range.
 func (l *Leftbox) clampCursor() {
-	n := len(visible(l.Rows, l.Tab, l.Filter))
+	n := len(l.selectableRows())
 	l.Cursor = max(0, min(l.Cursor, n-1))
 }
 
