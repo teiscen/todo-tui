@@ -81,9 +81,6 @@ func (c Config) LoadPlannerModel() planner.Planner {
 func (c Config) LoadLeftboxModel() leftbox.Leftbox {
 	l := leftbox.NewLeftbox()
 	l.Labels = c.Labels
-	// These are the task rows currently present in the project. Replace this
-	// placeholder loader when task persistence is implemented.
-	l.ReloadState(leftbox.MockRows())
 	return l
 }
 
