@@ -20,6 +20,7 @@ import (
 // until sql representation is finished.
 // Once done: Change the way labels is being initialized
 type Config struct {
+	Layout LayoutConfig `yaml:"layout"`
 	Colors struct {
 		Text    backend.HexCode `yaml:"text"`
 		Border  backend.HexCode `yaml:"border"`
@@ -28,6 +29,28 @@ type Config struct {
 	} `yaml:"colors"`
 	Labels backend.Labels `yaml:"labels"`
 	// Calendar backend.Calendar `yaml:"-"`
+}
+
+// LayoutConfig centralizes dashboard panel dimensions in terminal cells.
+type LayoutConfig struct {
+	Tasks PanelSize `yaml:"tasks"`
+	Preview PanelSize `yaml:"preview"`
+	Editor PanelSize `yaml:"editor"`
+}
+
+// PanelSize describes the outer width and height of a rendered panel.
+type PanelSize struct {
+	Width int `yaml:"width"`
+	Height int `yaml:"height"`
+}
+
+func (c *Config) setLayoutDefaults() {
+	if c.Layout.Tasks.Width <= 0 { c.Layout.Tasks.Width = 50 }
+	if c.Layout.Tasks.Height <= 0 { c.Layout.Tasks.Height = 43 }
+	if c.Layout.Preview.Width <= 0 { c.Layout.Preview.Width = 50 }
+	if c.Layout.Preview.Height <= 0 { c.Layout.Preview.Height = 43 }
+	if c.Layout.Editor.Width <= 0 { c.Layout.Editor.Width = c.Layout.Preview.Width }
+	if c.Layout.Editor.Height <= 0 { c.Layout.Editor.Height = c.Layout.Preview.Height }
 }
 
 func LoadConfig(filePath string) (Config, error) {
@@ -42,6 +65,7 @@ func LoadConfig(filePath string) (Config, error) {
 		return config, fmt.Errorf("parse config: %w", err)
 	}
 
+	config.setLayoutDefaults()
 	return config, nil
 }
 
@@ -80,10 +104,15 @@ func (c Config) LoadPlannerModel() planner.Planner {
 
 func (c Config) LoadLeftboxModel() leftbox.Leftbox {
 	l := leftbox.NewLeftbox()
+	l.Style.Width = c.Layout.Tasks.Width
+	l.Style.Height = c.Layout.Tasks.Height
 	l.Labels = c.Labels
 	return l
 }
 
 func (c Config) LoadPreviewModel() preview.Preview {
-	return preview.NewPreview()
+	p := preview.NewPreview()
+	p.Style.Width = c.Layout.Preview.Width
+	p.Style.Height = c.Layout.Preview.Height
+	return p
 }
