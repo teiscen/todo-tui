@@ -55,27 +55,12 @@ func NewTodo(cfg config.Config, db *sql.DB) *Todo {
 		focus:        PaneTasks,
 	}
 
-	if err := t.syncLabels(); err != nil {
+	if err := database.SyncLabels(t.db, t.cfg.Labels); err != nil {
 		t.err = err
 	}
 	t.reloadTasks()
 	t.syncPreview()
 	return t
-}
-
-// syncLabels writes configured label metadata before tasks use those labels as foreign keys.
-func (t *Todo) syncLabels() error {
-	for _, id := range t.cfg.Labels.Order {
-		info := t.cfg.Labels.Info[id]
-		_, err := t.db.Exec(
-			"INSERT INTO labels(name, color) VALUES(?, ?) ON CONFLICT(name) DO UPDATE SET color = excluded.color",
-			string(id), string(info.Color),
-		)
-		if err != nil {
-			return fmt.Errorf("sync label %q: %w", id, err)
-		}
-	}
-	return nil
 }
 
 // Init asks the planner to load its initially selected date and label.

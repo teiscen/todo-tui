@@ -2,12 +2,16 @@ package database
 
 import (
 	"database/sql"
+	_ "embed"
 	"fmt"
 
 	"todo-tui/backend"
 
-	_ "github.com/glebarez/go-sqlite"
+	_ "github.com/glebarez/go-sqlite" // registers the "sqlite" driver
 )
+
+//go:embed schema.sql
+var schema string
 
 func FetchGridEntries(
 	db *sql.DB, sDate, eDate backend.Date, labelID backend.LabelID,
@@ -54,6 +58,36 @@ func ConnectDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
 	return db, nil
+}
+
+// CreateTables creates every table and index that does not exist yet.
+func CreateTables(db *sql.DB) error {
+	if _, err := db.Exec(schema); err != nil {
+		return fmt.Errorf("create tables: %w", err)
+	}
+	return nil
+}
+
+// SyncLabels makes the labels table match the config, so entries and todos can
+// reference them. Labels already in the table but not in the config are kept.
+func SyncLabels(db *sql.DB, labels backend.Labels) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("sync labels: %w", err)
+	}
+	defer tx.Rollback()
+
+	for _, id := range labels.Order {
+		_, err := tx.Exec(
+			`INSERT INTO labels (name, color) VALUES (?, ?)
+			 ON CONFLICT(name) DO UPDATE SET color = excluded.color`,
+			string(id), string(labels.Info[id].Color),
+		)
+		if err != nil {
+			return fmt.Errorf("sync label %q: %w", id, err)
+		}
+	}
+	return tx.Commit()
 }
 
 // Basic IO
