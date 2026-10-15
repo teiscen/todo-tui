@@ -17,6 +17,7 @@ type Preview struct {
 	Style    PreviewStyle
 	Selected leftbox.Row
 	HasTask  bool
+	// Form is non-nil while the preview panel is displaying the task editor.
 	Form *taskform.Form
 }
 
@@ -25,9 +26,12 @@ func NewPreview() Preview {
 	return Preview{Style: GetDefaultStyle()}
 }
 
-// SetTask updates the task shown by the preview; ok=false shows the empty state.
-func (p *Preview) SetForm(form *taskform.Form) { p.Form = form }
+// SetForm switches the preview panel into task-editing mode.
+func (p *Preview) SetForm(form *taskform.Form) {
+	p.Form = form
+}
 
+// SetTask switches back to read-only details; ok=false shows the empty state.
 func (p *Preview) SetTask(row leftbox.Row, ok bool) {
 	p.Form = nil
 	p.Selected = row
@@ -38,7 +42,9 @@ func (p Preview) Init() tea.Cmd { return nil }
 
 // View renders task fields, then fits the result into the panel's fixed dimensions.
 func (p Preview) View() tea.View {
-	if p.Form != nil { return p.Form.View() }
+	if p.Form != nil {
+		return p.Form.View()
+	}
 	const width = 50
 	const height = 43
 	innerWidth := width - 4
