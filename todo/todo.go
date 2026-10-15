@@ -100,9 +100,9 @@ func (t *Todo) View() tea.View {
 
 	content := lipgloss.JoinHorizontal(
 		lipgloss.Top,
-		withHelp(tasks.View().Content, t.focus == PaneTasks, "j/k move · space complete · enter group", "a add · e edit · f filter · [/] tabs"),
-		withHelp(previewPanel.View().Content, t.focus == PanePreview, "j/k scroll", "e edit selected task · a add task"),
-		withHelp(plannerPanel.View().Content, t.focus == PanePlanner, "h/j/k/l move date", "ctrl+w calendar/notes · ctrl+h/l label · ctrl+j/k month"),
+		withHelp(tasks.View().Content, t.focus == PaneTasks, "tab/shift+tab focus · ctrl+1/2/3 pane · j/k move", "space complete · enter group · a add · e edit · f filter · [/] tabs"),
+		withHelp(previewPanel.View().Content, t.focus == PanePreview, "tab/shift+tab focus · ctrl+1/2/3 pane", "e edit selected task · a add task"),
+		withHelp(plannerPanel.View().Content, t.focus == PanePlanner, "tab/shift+tab focus · ctrl+1/2/3 pane · h/j/k/l move date", "ctrl+w calendar/notes · ctrl+h/l label · ctrl+j/k month"),
 	)
 	view := tea.NewView(content)
 	view.MouseMode = tea.MouseModeAllMotion
@@ -127,6 +127,7 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.MouseMotionMsg:
 		if !t.formActive && m.X < t.leftboxModel.Style.Width && t.leftboxModel.HoverAt(m.Y) {
+			t.focus = PaneTasks
 			t.syncPreview()
 		}
 		return t, nil
