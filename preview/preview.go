@@ -6,6 +6,7 @@ import (
 
 	"todo-tui/backend"
 	"todo-tui/leftbox"
+	"todo-tui/taskform"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -16,6 +17,7 @@ type Preview struct {
 	Style    PreviewStyle
 	Selected leftbox.Row
 	HasTask  bool
+	Form *taskform.Form
 }
 
 // NewPreview creates the details panel with its default colors.
@@ -24,7 +26,10 @@ func NewPreview() Preview {
 }
 
 // SetTask updates the task shown by the preview; ok=false shows the empty state.
+func (p *Preview) SetForm(form *taskform.Form) { p.Form = form }
+
 func (p *Preview) SetTask(row leftbox.Row, ok bool) {
+	p.Form = nil
 	p.Selected = row
 	p.HasTask = ok
 }
@@ -33,6 +38,7 @@ func (p Preview) Init() tea.Cmd { return nil }
 
 // View renders task fields, then fits the result into the panel's fixed dimensions.
 func (p Preview) View() tea.View {
+	if p.Form != nil { return p.Form.View() }
 	const width = 50
 	const height = 43
 	innerWidth := width - 4
