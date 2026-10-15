@@ -108,7 +108,7 @@ func (f Form) Update(msg tea.Msg) (Form, tea.Cmd) {
 	case "left", "right":
 		f.changeChoice(key.String() == "right")
 		return f, nil
-	case " ":
+	case " ", "space":
 		if f.Focus == fieldRecurring {
 			f.Recurring = !f.Recurring
 			return f, nil
