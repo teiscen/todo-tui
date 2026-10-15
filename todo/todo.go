@@ -23,7 +23,6 @@ type Todo struct {
 	leftboxModel leftbox.Leftbox
 	previewModel preview.Preview
 
-	Style TodoStyle
 }
 
 // NewTodo builds the dashboard from configuration and selects the initial task, if any.
