@@ -30,13 +30,13 @@ func (c *Calendar) Movement(dir direction) tea.Cmd {
 	oldDate := c.SelectedDate
 	switch dir {
 	case Left:
-		c.SelectedDate.ChangeDate(0, 0, -1)
+		c.SelectedDate = oldDate.AddDate(0, 0, -1)
 	case Down:
-		c.SelectedDate.ChangeDate(0, 0, 7)
+		c.SelectedDate = oldDate.AddDate(0, 0, 7)
 	case Up:
-		c.SelectedDate.ChangeDate(0, 0, -7)
+		c.SelectedDate = oldDate.AddDate(0, 0, -7)
 	case Right:
-		c.SelectedDate.ChangeDate(0, 0, 1)
+		c.SelectedDate = oldDate.AddDate(0, 0, 1)
 	}
 
 	if oldDate.Month() != c.SelectedDate.Month() {

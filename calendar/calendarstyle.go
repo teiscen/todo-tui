@@ -39,7 +39,6 @@ func GetDefaultStyle() CalendarStyle {
 func (c CalendarStyle) WeekdayStyle(isValid bool) lipgloss.Style {
 	color := c.ColorWeekday
 	if !isValid {
-		// color, _ = c.ColorWeekday.MuteColorAvg()
 		color, _ = c.ColorWeekday.MuteColorTarget(backend.HexCode("#303446"), 0.8)
 	}
 	return color.ToStyle().Width(c.ColumnWidth).Align(lipgloss.Center)
@@ -48,7 +47,6 @@ func (c CalendarStyle) WeekdayStyle(isValid bool) lipgloss.Style {
 func (c CalendarStyle) WeekendStyle(isValid bool) lipgloss.Style {
 	color := c.ColorWeekend
 	if !isValid {
-		// color, _ = c.ColorWeekend.MuteColorAvg()
 		color, _ = c.ColorWeekend.MuteColorTarget(backend.HexCode("#303446"), 0.8)
 	}
 	return color.ToStyle().Width(c.ColumnWidth).Align(lipgloss.Center)
@@ -57,7 +55,6 @@ func (c CalendarStyle) WeekendStyle(isValid bool) lipgloss.Style {
 func (c CalendarStyle) AccentStyle(isValid bool) lipgloss.Style {
 	color := c.ColorAccent
 	if !isValid {
-		// color, _ = c.ColorAccent.MuteColorAvg()
 		color, _ = c.ColorAccent.MuteColorTarget(backend.HexCode("#303446"), 0.8)
 	}
 	return color.ToStyle().Width(c.ColumnWidth).Align(lipgloss.Center)

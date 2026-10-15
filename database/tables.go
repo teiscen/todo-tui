@@ -7,11 +7,6 @@ import (
 	_ "github.com/glebarez/go-sqlite" // registers the "sqlite" driver
 )
 
-// Open enables foreign keys on every pooled connection (SQLite has them off by default).
-func Open(path string) (*sql.DB, error) {
-	return sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
-}
-
 // CreateTables runs every table creator in dependency order, then the indexes.
 func CreateTables(db *sql.DB) error {
 	steps := []struct {

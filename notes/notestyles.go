@@ -18,7 +18,6 @@ type NotesStyle struct {
 func (n NotesStyle) GenStyle() textarea.Styles {
 	cText := n.ColorText
 	cAccent := n.ColorAccent
-	// cCursor := n.ColorCursor
 
 	cTextMute, err := cText.MuteColorTarget(backend.HexCode("#303446"), 0.4)
 	if err != nil {
@@ -54,7 +53,6 @@ func (n NotesStyle) GenStyle() textarea.Styles {
 		Color: lipgloss.Color(string(cAccent)),
 		Shape: tea.CursorBar, // tea.CursorBlock, tea.CursorUnderline
 		Blink: false,
-		// BlinkSpeed: 500 * time.Millisecond, // Only matters if Blink is true
 	}
 
 	return textarea.Styles{

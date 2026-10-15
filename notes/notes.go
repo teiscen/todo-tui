@@ -1,6 +1,8 @@
 package notes
 
 import (
+	backend "todo-tui/backend"
+
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 )
@@ -70,4 +72,14 @@ func (n Notes) Update(msg tea.Msg) (Notes, tea.Cmd) {
 	// Delegate all other messages (keystrokes, cursor blink ticks) to the textarea
 	n.TextArea, cmd = n.TextArea.Update(msg)
 	return n, cmd
+}
+
+func (n *Notes) ChangeValue(str string) {
+	n.TextArea.SetValue(str)
+}
+
+// SetAccent changes the accent color and regenerates the textarea styles.
+func (n *Notes) SetAccent(c backend.HexCode) {
+	n.Style.ColorAccent = c
+	n.Style.Styles = n.Style.GenStyle()
 }

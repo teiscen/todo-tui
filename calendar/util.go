@@ -24,8 +24,7 @@ func (c Calendar) GetSelectedColor() backend.HexCode {
 	}
 	if infoAddr.IsMarked {
 		color = c.Style.ColorAccent
-	} else if infoAddr.Date.Day() == 0 ||
-		infoAddr.Date.Day() == 6 {
+	} else if infoAddr.Date.IsWeekend() {
 		color = c.Style.ColorWeekend
 	} else {
 		color = c.Style.ColorWeekday

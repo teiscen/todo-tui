@@ -204,19 +204,6 @@ func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 	return l, nil
 }
 
-// toggleSelectedGroup expands or collapses the selected task's group.
-func (l *Leftbox) toggleSelectedGroup() {
-	row, ok := l.Selected()
-	if !ok {
-		return
-	}
-	if l.Collapsed == nil {
-		l.Collapsed = make(map[Group]bool)
-	}
-	l.Collapsed[row.Group] = !l.Collapsed[row.Group]
-	l.clampCursor()
-}
-
 // ── drawing ─────────────────────────────────────────────────────────────
 
 // tabBar is the title that sits in the top border. Every tab is the same width

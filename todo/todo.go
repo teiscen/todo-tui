@@ -124,6 +124,11 @@ func withHelp(content string, focused bool, movement, specific string) string {
 
 // Update routes messages to the active panel and handles database-backed task actions.
 func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// ctrl+q exits from anywhere, including while the task editor is open.
+	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+q" {
+		return t, tea.Quit
+	}
+
 	switch m := msg.(type) {
 	case tea.MouseMotionMsg:
 		if !t.formActive && m.X < t.leftboxModel.Style.Width && t.leftboxModel.HoverAt(m.Y) {

@@ -43,8 +43,6 @@ func NewPlanner(date backend.Date) Planner {
 
 // Init asks the root to load the starting month, the same way a month change does.
 func (p Planner) Init() tea.Cmd {
-	// d := p.CalendarModel.SelectedDate
-	// return func() tea.Msg { return UpdateMonthMsg{d} }
 	return nil
 }
 
@@ -132,12 +130,6 @@ func (p Planner) Update(msg tea.Msg) (Planner, tea.Cmd) {
 			return p, p.UpdateMonth(true)
 		case "ctrl+k": // previous month
 			return p, p.UpdateMonth(false)
-		// case "ctrl+r": // save the entry
-		// 	return p, p.SaveEntry()
-		// case "x": // mark/unmark the day, only when the calendar has focus
-		// if p.Focus == FocusCalendar {
-		// 	return p, p.ToggleEntry()
-		// }
 		case "ctrl+c":
 			return p, tea.Quit
 		}
@@ -190,14 +182,4 @@ func (p Planner) Update(msg tea.Msg) (Planner, tea.Cmd) {
 		}
 	}
 	return p, cmd
-
-	// The calendar moved on its own (h/j/k/l). If it left the month, ask the
-	// root to reload the grid, which also refreshes Notes. Otherwise only the
-	// selected day changed, so show that day's entry.
-	// if cur := p.CalendarModel.SelectedDate; cur != prev {
-	// 	if cur.Year != prev.Year || cur.Month != prev.Month {
-	// 		cmd = tea.Batch(cmd, func() tea.Msg { return UpdateMonthMsg{cur} })
-	// 	} else {
-	// 		p.SyncNotes()
-	// 	}
 }

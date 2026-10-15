@@ -8,9 +8,8 @@ import (
 func (t *Todo) ReloadPlannerState(lID backend.LabelID, date backend.Date) {
 	// Start Date is the first Sunday from the first of the month.
 	// End Date is 41 days after it.
-	sDate := date
-	sDate.FirstDay()
-	sDate.ChangeDate(0, 0, -sDate.Weekday())
+	first := date.FirstDay()
+	sDate := first.AddDate(0, 0, -first.Weekday())
 	eDate := sDate.AddDate(0, 0, 41)
 
 	entries, err := database.FetchGridEntries(t.db, sDate, eDate, lID)

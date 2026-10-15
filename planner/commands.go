@@ -29,7 +29,7 @@ func (p *Planner) UpdateMonth(next bool) tea.Cmd {
 	if next {
 		step = 1
 	}
-	p.SelectedDate().ChangeDate(0, step, 0)
+	p.CalendarModel.SelectedDate = p.CalendarModel.SelectedDate.AddMonths(step)
 	return func() tea.Msg {
 		return ChangeCalendarMsg{
 			*p.SelectedLabel(),
@@ -60,28 +60,3 @@ type RemoveEntryMsg struct {
 	Date  backend.Date
 	Label backend.LabelID
 }
-
-// SaveEntry saves the notes text as the selected day's entry (ctrl+r).
-// Saving also marks the day.
-// func (p *Planner) SaveEntry() tea.Cmd {
-// 	if p.Labels.Selected == "" {
-// 		return nil
-// 	}
-// 	msg := SaveEntryMsg{
-// 		Date:  p.CalendarModel.SelectedDate,
-// 		Label: p.Labels.Selected,
-// 		Msg:   p.NotesModel.TextArea.Value(),
-// 	}
-// 	return func() tea.Msg { return msg }
-// }
-
-// ToggleEntry marks or unmarks the selected day (x). Marking creates an entry
-// from the current notes text, unmarking removes the entry.
-// func (p *Planner) ToggleEntry() tea.Cmd {
-// 	date := p.CalendarModel.SelectedDate
-// 	if !p.HasEntry(date) {
-// 		return p.SaveEntry()
-// 	}
-// 	msg := RemoveEntryMsg{Date: date, Label: p.Labels.Selected}
-// 	return func() tea.Msg { return msg }
-// }
