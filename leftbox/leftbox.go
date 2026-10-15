@@ -67,7 +67,7 @@ func (l Leftbox) View() tea.View {
 			if prev != -1 {
 				body = append(body, "")
 			}
-			body = append(body, l.groupHeading(r.Group))
+			body = append(body, l.groupHeading(r.Group, vis))
 			prev = r.Group
 		}
 		if l.Collapsed[r.Group] { continue }
@@ -174,7 +174,11 @@ func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 	case " ", "space":
 		return l, l.toggleCmd()
 	case "enter":
-		if r, ok := l.Selected(); ok { if l.Collapsed == nil { l.Collapsed = map[Group]bool{} }; l.Collapsed[r.Group] = !l.Collapsed[r.Group]; l.clampCursor() }
+		if r, ok := l.Selected(); ok {
+			if l.Collapsed == nil { l.Collapsed = map[Group]bool{} }
+			l.Collapsed[r.Group] = !l.Collapsed[r.Group]
+			l.clampCursor()
+		}
 	case "e":
 		if r, ok := l.Selected(); ok { if l.Expanded == nil { l.Expanded = map[int]bool{} }; l.Expanded[r.ID] = !l.Expanded[r.ID] }
 	}
@@ -239,7 +243,7 @@ func (l Leftbox) filterLines(width int) []string {
 }
 
 // groupHeading styles a group title using its semantic urgency.
-func (l Leftbox) groupHeading(g Group) string {
+func (l Leftbox) groupHeading(g Group, rows []Row) string {
 	s := l.Style
 	name := map[Group]string{
 		GroupOverdue: "OVERDUE",
@@ -252,6 +256,11 @@ func (l Leftbox) groupHeading(g Group) string {
 	if l.Tab == TabRecurring && g == GroupLater {
 		name = "OTHER DAYS"
 	}
+	count := 0
+	for _, row := range rows { if row.Group == g { count++ } }
+	marker := "▾"
+	if l.Collapsed[g] { marker = "▸" }
+	name = fmt.Sprintf("%s %s (%d)", marker, name, count)
 	color := s.ColorDim
 	if g == GroupOverdue {
 		color = s.ColorLate
