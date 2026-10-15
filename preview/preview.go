@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"todo-tui/backend"
-	"todo-tui/leftbox"
 	"todo-tui/taskform"
 	"todo-tui/ui"
 
@@ -13,17 +12,33 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// Detail is the fully-resolved task data the preview pane draws. It holds only
+// what the preview needs and has no dependency on leftbox; the root translates
+// the selected row into one.
+type Detail struct {
+	ID         int
+	Title      string
+	Done       bool
+	LabelID    backend.LabelID
+	Color      backend.HexCode
+	Schedule   string
+	Due        string
+	DueTone    backend.Tone
+	StepsDone  int
+	StepsTotal int
+}
+
 // Preview displays details for the task currently selected in the left panel.
 type Preview struct {
 	Style    PreviewStyle
-	Selected leftbox.Row
+	Selected Detail
 	HasTask  bool
 	// Form is non-nil while the preview panel is displaying the task editor.
 	Form *taskform.Form
 }
 
-// NewPreview creates the details panel with its configured colors and size.
-func NewPreview(theme backend.Theme, width, height int) Preview {
+// New creates the details panel with its configured colors and size.
+func New(theme backend.Theme, width, height int) Preview {
 	return Preview{Style: NewStyle(theme, width, height)}
 }
 
@@ -33,9 +48,9 @@ func (p *Preview) SetForm(form *taskform.Form) {
 }
 
 // SetTask switches back to read-only details; ok=false shows the empty state.
-func (p *Preview) SetTask(row leftbox.Row, ok bool) {
+func (p *Preview) SetTask(detail Detail, ok bool) {
 	p.Form = nil
-	p.Selected = row
+	p.Selected = detail
 	p.HasTask = ok
 }
 

@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	"todo-tui/backend"
 )
 
 // Task is the database representation used by the task list and editor.
@@ -144,16 +146,16 @@ func saveRecurrence(tx *sql.Tx, id int64, task Task) error {
 	}
 
 	kind := task.Kind
-	if kind != "daily" && kind != "weekdays" && kind != "interval" {
-		kind = "daily"
+	if kind != backend.RecurDaily && kind != backend.RecurWeekdays && kind != backend.RecurInterval {
+		kind = backend.RecurDaily
 	}
 	weekdays := task.Weekdays
-	if kind == "weekdays" && weekdays == 0 {
-		weekdays = 62 // Monday through Friday, with Sunday at bit zero.
+	if kind == backend.RecurWeekdays && weekdays == 0 {
+		weekdays = backend.WeekdaysMonFri
 	}
 
 	var interval any
-	if kind == "interval" {
+	if kind == backend.RecurInterval {
 		days := int64(1)
 		if task.IntervalDays.Valid && task.IntervalDays.Int64 > 0 {
 			days = task.IntervalDays.Int64

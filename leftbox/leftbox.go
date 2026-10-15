@@ -25,8 +25,8 @@ type Leftbox struct {
 	Expanded  map[int]bool
 }
 
-// NewLeftbox initializes an empty list and its per-group/per-task UI state.
-func NewLeftbox(theme backend.Theme, labels backend.Labels, width, height int) Leftbox {
+// New initializes an empty list and its per-group/per-task UI state.
+func New(theme backend.Theme, labels backend.Labels, width, height int) Leftbox {
 	style := NewStyle(theme)
 	style.Width = width
 	style.Height = height

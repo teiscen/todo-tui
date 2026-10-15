@@ -18,8 +18,8 @@ type Notes struct {
 	Style    NotesStyle
 }
 
-// NewNotes creates a textarea configured for calendar-entry notes.
-func NewNotes(theme backend.Theme, initText string) Notes {
+// New creates a textarea configured for calendar-entry notes.
+func New(theme backend.Theme, initText string) Notes {
 	ta := textarea.New()
 
 	ta.Prompt = ""

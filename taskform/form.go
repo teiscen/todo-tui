@@ -1,13 +1,11 @@
 package taskform
 
 import (
-	"database/sql"
 	"strconv"
 	"strings"
 	"time"
 
 	"todo-tui/backend"
-	"todo-tui/database"
 	"todo-tui/ui"
 
 	tea "charm.land/bubbletea/v2"
@@ -26,11 +24,28 @@ const (
 	fieldCount
 )
 
-var recurrenceKinds = []string{"daily", "weekdays", "interval"}
+var recurrenceKinds = []string{backend.RecurDaily, backend.RecurWeekdays, backend.RecurInterval}
+
+// Task is the form's own representation of the task being edited. It carries
+// the fields the editor needs without depending on the database package; the
+// root translates to and from database.Task.
+type Task struct {
+	ID           int
+	Title        string
+	LabelID      backend.LabelID
+	Horizon      string
+	DueDate      string
+	Notes        string
+	Recurring    bool
+	Kind         string
+	Weekdays     int
+	IntervalDays int
+	StartDate    string
+}
 
 // SavedMsg is emitted when the form has valid data ready to persist.
 type SavedMsg struct {
-	Task database.Task
+	Task Task
 }
 
 // CancelMsg tells the root model to close the form without saving.
@@ -43,7 +58,7 @@ type Form struct {
 	Height int
 	Labels backend.Labels
 
-	Task    database.Task
+	Task    Task
 	Editing bool
 	Focus   int
 
@@ -63,27 +78,27 @@ func New(theme backend.Theme, labels backend.Labels, width, height int) Form {
 		Width:    width,
 		Height:   height,
 		Labels:   labels,
-		Task:     database.Task{Horizon: "small"},
-		Kind:     "daily",
-		Interval: "3",
+		Task:     Task{Horizon: "small"},
+		Kind:     backend.RecurDaily,
+		Interval: strconv.Itoa(backend.DefaultIntervalDays),
 	}
 }
 
 // Begin loads a task into the form. A zero-value task starts a new entry.
-func (f *Form) Begin(task database.Task, editing bool) {
+func (f *Form) Begin(task Task, editing bool) {
 	f.Task = task
 	f.Editing = editing
 	f.Title = task.Title
-	f.Due = task.DueDate.String
+	f.Due = task.DueDate
 	f.Notes = task.Notes
 	f.Recurring = task.Recurring
 	f.Kind = task.Kind
 	if f.Kind == "" {
-		f.Kind = "daily"
+		f.Kind = backend.RecurDaily
 	}
-	f.Interval = strconv.FormatInt(task.IntervalDays.Int64, 10)
+	f.Interval = strconv.Itoa(task.IntervalDays)
 	if f.Interval == "0" {
-		f.Interval = "3"
+		f.Interval = strconv.Itoa(backend.DefaultIntervalDays)
 	}
 	f.Error = ""
 	f.Focus = fieldTitle
@@ -147,34 +162,31 @@ func (f *Form) saveCommand() tea.Cmd {
 	if task.Horizon != "long" {
 		task.Horizon = "small"
 	}
-	task.DueDate = sql.NullString{}
+	task.DueDate = ""
 	if strings.TrimSpace(f.Due) != "" {
 		if _, err := time.Parse("2006-01-02", f.Due); err != nil {
 			f.Error = "Due date must use YYYY-MM-DD"
 			return nil
 		}
-		task.DueDate = sql.NullString{String: f.Due, Valid: true}
-	}
-	if !task.LabelID.Valid || task.LabelID.String == "" {
-		task.LabelID = sql.NullString{}
+		task.DueDate = f.Due
 	}
 
 	task.Recurring = f.Recurring
 	task.Kind = f.Kind
 	task.StartDate = time.Now().Format("2006-01-02")
-	task.IntervalDays = sql.NullInt64{}
+	task.IntervalDays = 0
 	task.Weekdays = 0
 	if task.Recurring {
 		switch task.Kind {
-		case "weekdays":
-			task.Weekdays = 62
-		case "interval":
+		case backend.RecurWeekdays:
+			task.Weekdays = backend.WeekdaysMonFri
+		case backend.RecurInterval:
 			days, err := strconv.ParseInt(f.Interval, 10, 64)
 			if err != nil || days < 1 {
 				f.Error = "Interval must be a positive number"
 				return nil
 			}
-			task.IntervalDays = sql.NullInt64{Int64: days, Valid: true}
+			task.IntervalDays = int(days)
 		}
 	}
 	f.Error = ""
@@ -190,7 +202,7 @@ func (f *Form) changeChoice(forward bool) {
 		}
 		index := 0
 		for i, id := range f.Labels.Order {
-			if string(id) == f.Task.LabelID.String {
+			if id == f.Task.LabelID {
 				index = i
 				break
 			}
@@ -200,7 +212,7 @@ func (f *Form) changeChoice(forward bool) {
 		} else {
 			index = (index + len(f.Labels.Order) - 1) % len(f.Labels.Order)
 		}
-		f.Task.LabelID = sql.NullString{String: string(f.Labels.Order[index]), Valid: true}
+		f.Task.LabelID = f.Labels.Order[index]
 	case fieldHorizon:
 		if f.Task.Horizon == "long" {
 			f.Task.Horizon = "small"
@@ -278,7 +290,7 @@ func (f Form) View() string {
 	}
 	if f.Recurring {
 		lines = append(lines, f.field(fieldSchedule, "SCHEDULE", f.Kind))
-		if f.Kind == "interval" {
+		if f.Kind == backend.RecurInterval {
 			lines = append(lines, f.field(fieldInterval, "EVERY N DAYS", f.Interval))
 		}
 	}
@@ -305,13 +317,13 @@ func (f Form) field(index int, label, value string) string {
 }
 
 func (f Form) labelText() string {
-	if !f.Task.LabelID.Valid || f.Task.LabelID.String == "" {
+	if f.Task.LabelID == "" {
 		return "(none)"
 	}
-	if info, ok := f.Labels.Info[backend.LabelID(f.Task.LabelID.String)]; ok {
+	if info, ok := f.Labels.Info[f.Task.LabelID]; ok {
 		return info.Name
 	}
-	return f.Task.LabelID.String
+	return string(f.Task.LabelID)
 }
 
 func dropLast(value string) string {

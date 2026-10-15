@@ -48,9 +48,9 @@ func NewTodo(cfg config.Config, db *sql.DB) *Todo {
 	t := &Todo{
 		db:           db,
 		cfg:          cfg,
-		plannerModel: planner.NewPlanner(theme, cfg.Labels, backend.NewDate(time.Now())),
-		leftboxModel: leftbox.NewLeftbox(theme, cfg.Labels, cfg.Layout.Tasks.Width, cfg.Layout.Tasks.Height),
-		previewModel: preview.NewPreview(theme, cfg.Layout.Preview.Width, cfg.Layout.Preview.Height),
+		plannerModel: planner.New(theme, cfg.Labels, backend.NewDate(time.Now())),
+		leftboxModel: leftbox.New(theme, cfg.Labels, cfg.Layout.Tasks.Width, cfg.Layout.Tasks.Height),
+		previewModel: preview.New(theme, cfg.Layout.Preview.Width, cfg.Layout.Preview.Height),
 		form:         taskform.New(theme, cfg.Labels, cfg.Layout.Editor.Width, cfg.Layout.Editor.Height),
 		focus:        PaneTasks,
 	}
@@ -148,7 +148,7 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, nil
 
 	case taskform.SavedMsg:
-		if _, err := database.SaveTask(t.db, m.Task); err != nil {
+		if _, err := database.SaveTask(t.db, dbTaskFromForm(m.Task)); err != nil {
 			t.err = err
 			t.form.Error = err.Error()
 			t.previewModel.SetForm(&t.form)
@@ -244,12 +244,9 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // beginAdd opens a blank form, defaulting to the currently selected label.
 func (t *Todo) beginAdd() {
 	t.focus = PanePreview
-	task := database.Task{
+	task := taskform.Task{
 		Horizon: "small",
-		LabelID: sql.NullString{
-			String: string(t.cfg.Labels.Selected),
-			Valid:  t.cfg.Labels.Selected != "",
-		},
+		LabelID: t.cfg.Labels.Selected,
 	}
 	t.form.Begin(task, false)
 	t.formActive = true
@@ -271,7 +268,7 @@ func (t *Todo) beginEdit() {
 	for _, task := range tasks {
 		if task.ID == row.ID {
 			t.focus = PanePreview
-			t.form.Begin(task, true)
+			t.form.Begin(formTaskFromDB(task), true)
 			t.formActive = true
 			t.previewModel.SetForm(&t.form)
 			return
@@ -329,11 +326,11 @@ func (t *Todo) rowFromTask(task database.Task, today backend.Date) (leftbox.Row,
 	if task.Recurring {
 		row.Schedule = leftbox.ScheduleText(task.Weekdays)
 		switch task.Kind {
-		case "daily":
+		case backend.RecurDaily:
 			row.Schedule = "daily"
-		case "weekdays":
+		case backend.RecurWeekdays:
 			row.Schedule = leftbox.ScheduleText(task.Weekdays)
-		case "interval":
+		case backend.RecurInterval:
 			row.Schedule = fmt.Sprintf("every %dd", task.IntervalDays.Int64)
 		}
 		row.Group = leftbox.GroupToday
@@ -365,8 +362,8 @@ func (t *Todo) syncPreview() {
 		return
 	}
 	if row, ok := t.leftboxModel.Selected(); ok {
-		t.previewModel.SetTask(row, true)
+		t.previewModel.SetTask(detailFromRow(row), true)
 		return
 	}
-	t.previewModel.SetTask(leftbox.Row{}, false)
+	t.previewModel.SetTask(preview.Detail{}, false)
 }

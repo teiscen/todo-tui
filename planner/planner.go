@@ -30,10 +30,11 @@ type Planner struct {
 	Labels  backend.Labels
 }
 
-func NewPlanner(theme backend.Theme, labels backend.Labels, date backend.Date) Planner {
+// New builds a planner pane composing the calendar and notes sub-panes.
+func New(theme backend.Theme, labels backend.Labels, date backend.Date) Planner {
 	p := Planner{
-		NotesModel:    notes.NewNotes(theme, ""),
-		CalendarModel: calendar.NewCalendar(theme, date),
+		NotesModel:    notes.New(theme, ""),
+		CalendarModel: calendar.New(theme, date),
 		Style:         NewStyle(theme),
 
 		Labels: labels,

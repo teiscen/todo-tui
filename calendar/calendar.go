@@ -20,7 +20,8 @@ type Calendar struct {
 	State        [6][7]Info
 }
 
-func NewCalendar(theme backend.Theme, date backend.Date) Calendar {
+// New builds a calendar pane for the given month.
+func New(theme backend.Theme, date backend.Date) Calendar {
 	return Calendar{
 		SelectedDate: date,
 		Style:        NewStyle(theme),
