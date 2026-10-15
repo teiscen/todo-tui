@@ -38,6 +38,8 @@ type CancelMsg struct{}
 // Form edits the fields shared by new and existing tasks.
 type Form struct {
 	Style backend.HexCode
+	Width int
+	Height int
 	Labels backend.Labels
 
 	Task database.Task
@@ -54,9 +56,11 @@ type Form struct {
 }
 
 // New returns a form configured with the supplied labels and default values.
-func New(labels backend.Labels) Form {
+func New(labels backend.Labels, width, height int) Form {
 	return Form{
 		Style: backend.HexCode("#C6D0F5"),
+		Width: width,
+		Height: height,
 		Labels: labels,
 		Task: database.Task{Horizon: "small"},
 		Kind: "daily",
@@ -283,8 +287,8 @@ func (f Form) View() tea.View {
 	}
 
 	box := lipgloss.NewStyle().
-		Width(50).
-		Height(42).
+		Width(f.Width).
+		Height(f.Height).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(string(f.Style)))
