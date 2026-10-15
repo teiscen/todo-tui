@@ -5,11 +5,12 @@ import (
 )
 
 type PlannerStyle struct {
-	BorderColor backend.HexCode
+	Theme backend.Theme
 }
 
-func GetDefaultStyle() PlannerStyle {
+// NewStyle builds a planner style from the shared theme.
+func NewStyle(theme backend.Theme) PlannerStyle {
 	return PlannerStyle{
-		BorderColor: backend.HexCode("#c6d0f5"),
+		Theme: theme,
 	}
 }

@@ -17,17 +17,20 @@ type Leftbox struct {
 	Style  LeftboxStyle
 	Labels backend.Labels
 
-	Rows   []Row
-	Tab    Tab
-	Filter backend.LabelID // "" = all labels
-	Cursor int             // index into the visible rows
+	Rows      []Row
+	Tab       Tab
+	Filter    backend.LabelID // "" = all labels
+	Cursor    int             // index into the visible rows
 	Collapsed map[Group]bool
-	Expanded map[int]bool
+	Expanded  map[int]bool
 }
 
 // NewLeftbox initializes an empty list and its per-group/per-task UI state.
-func NewLeftbox() Leftbox {
-	return Leftbox{Style: GetDefaultStyle(), Collapsed: map[Group]bool{}, Expanded: map[int]bool{}}
+func NewLeftbox(theme backend.Theme, labels backend.Labels, width, height int) Leftbox {
+	style := NewStyle(theme)
+	style.Width = width
+	style.Height = height
+	return Leftbox{Style: style, Labels: labels, Collapsed: map[Group]bool{}, Expanded: map[int]bool{}}
 }
 
 func (l Leftbox) Init() tea.Cmd {
@@ -62,9 +65,9 @@ func (l Leftbox) selectableRows() []Row {
 }
 
 // View renders the tab/filter header, grouped task rows, and keyboard hints.
-func (l Leftbox) View() tea.View {
+func (l Leftbox) View() string {
 	s := l.Style
-	contentW := s.Width - 4   // border + 1 column of padding on each side
+	contentW := s.Width - 4 // border + 1 column of padding on each side
 	header := append([]string{l.tabBar()}, l.filterLines(contentW)...)
 	header = append(header, "")
 	bodyH := s.Height - 2 - len(header)
@@ -90,18 +93,24 @@ func (l Leftbox) View() tea.View {
 			cursorLine = len(body)
 		}
 		marker := "▸ "
-		if l.Expanded[r.ID] { marker = "▾ " }
+		if l.Expanded[r.ID] {
+			marker = "▾ "
+		}
 		body = append(body, marker+l.renderRow(r, selectableIndex == l.Cursor, contentW-2))
 		selectableIndex++
 		if l.Expanded[r.ID] {
 			detail := "  No subtasks"
-			if r.StepsTotal > 0 { detail = fmt.Sprintf("  Progress: %d/%d steps completed", r.StepsDone, r.StepsTotal) }
-			if r.Schedule != "" { detail += " · " + r.Schedule }
-			body = append(body, ui.Fg(s.ColorDim).Render(ansi.Truncate(detail, contentW, "…")))
+			if r.StepsTotal > 0 {
+				detail = fmt.Sprintf("  Progress: %d/%d steps completed", r.StepsDone, r.StepsTotal)
+			}
+			if r.Schedule != "" {
+				detail += " · " + r.Schedule
+			}
+			body = append(body, ui.Fg(s.Theme.Dim).Render(ansi.Truncate(detail, contentW, "…")))
 		}
 	}
 	if len(body) == 0 {
-		body = []string{ui.Fg(s.ColorDim).Render("nothing here")}
+		body = []string{ui.Fg(s.Theme.Dim).Render("nothing here")}
 	}
 	start := windowStart(len(body), cursorLine, bodyH)
 	body = body[start:min(len(body), start+bodyH)]
@@ -110,7 +119,7 @@ func (l Leftbox) View() tea.View {
 
 	top := ui.GenBorder(
 		" Tasks ",
-		ui.Fg(s.ColorBorder),
+		ui.Fg(s.Theme.Border),
 		ui.Top,
 		s.Width-2,
 	)
@@ -118,11 +127,11 @@ func (l Leftbox) View() tea.View {
 		Width(s.Width).
 		Height(s.Height-1).
 		Padding(0, 1).
-		BorderForeground(lipgloss.Color(string(s.ColorBorder))).
+		BorderForeground(lipgloss.Color(string(s.Theme.Border))).
 		Border(lipgloss.RoundedBorder(), false, true, true, true)
 
 	content := box.Render(strings.Join(lines, "\n"))
-	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, top, content))
+	return lipgloss.JoinVertical(lipgloss.Left, top, content)
 }
 
 // HoverAt maps a terminal Y coordinate to a task row in the left panel.
@@ -195,12 +204,19 @@ func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 		return l, l.toggleCmd()
 	case "enter":
 		if r, ok := l.Selected(); ok {
-			if l.Collapsed == nil { l.Collapsed = map[Group]bool{} }
+			if l.Collapsed == nil {
+				l.Collapsed = map[Group]bool{}
+			}
 			l.Collapsed[r.Group] = !l.Collapsed[r.Group]
 			l.clampCursor()
 		}
 	case "e":
-		if r, ok := l.Selected(); ok { if l.Expanded == nil { l.Expanded = map[int]bool{} }; l.Expanded[r.ID] = !l.Expanded[r.ID] }
+		if r, ok := l.Selected(); ok {
+			if l.Expanded == nil {
+				l.Expanded = map[int]bool{}
+			}
+			l.Expanded[r.ID] = !l.Expanded[r.ID]
+		}
 	}
 	return l, nil
 }
@@ -216,9 +232,9 @@ func (l Leftbox) tabBar() string {
 	for i := range tabCount {
 		label := fmt.Sprintf("%s %d", tabNames[i], counts[i])
 		if Tab(i) == l.Tab {
-			parts = append(parts, ui.Fg(s.ColorAccent).Bold(true).Render("["+label+"]"))
+			parts = append(parts, ui.Fg(s.Theme.Accent).Bold(true).Render("["+label+"]"))
 		} else {
-			parts = append(parts, ui.Fg(s.ColorDim).Render(" "+label+" "))
+			parts = append(parts, ui.Fg(s.Theme.Dim).Render(" "+label+" "))
 		}
 	}
 	return strings.Join(parts, " ")
@@ -237,7 +253,7 @@ func (l Leftbox) filterLines(width int) []string {
 		chips = append(chips, ui.Fg(color).Bold(active).Render(text))
 		chipWidths = append(chipWidths, lipgloss.Width(text))
 	}
-	add("all", s.ColorText, l.Filter == "")
+	add("all", s.Theme.Text, l.Filter == "")
 	for _, id := range l.Labels.Order {
 		add(string(id), l.Labels.Info[id].Color, l.Filter == id)
 	}
@@ -247,18 +263,27 @@ func (l Leftbox) filterLines(width int) []string {
 	for i, chip := range chips {
 		w := chipWidths[i]
 		gap := 1
-		if line == "" { gap = 0 }
+		if line == "" {
+			gap = 0
+		}
 		if line != "" && lineWidth+gap+w > width {
 			lines = append(lines, line)
 			line, lineWidth = chip, w
 			continue
 		}
-		if gap > 0 { line += " "; lineWidth++ }
+		if gap > 0 {
+			line += " "
+			lineWidth++
+		}
 		line += chip
 		lineWidth += w
 	}
-	if line != "" { lines = append(lines, line) }
-	if len(lines) == 0 { return []string{""} }
+	if line != "" {
+		lines = append(lines, line)
+	}
+	if len(lines) == 0 {
+		return []string{""}
+	}
 	return lines
 }
 
@@ -277,13 +302,19 @@ func (l Leftbox) groupHeading(g Group, rows []Row) string {
 		name = "OTHER DAYS"
 	}
 	count := 0
-	for _, row := range rows { if row.Group == g { count++ } }
+	for _, row := range rows {
+		if row.Group == g {
+			count++
+		}
+	}
 	marker := "▾"
-	if l.Collapsed[g] { marker = "▸" }
+	if l.Collapsed[g] {
+		marker = "▸"
+	}
 	name = fmt.Sprintf("%s %s (%d)", marker, name, count)
-	color := s.ColorDim
+	color := s.Theme.Dim
 	if g == GroupOverdue {
-		color = s.ColorLate
+		color = s.Theme.Late
 	}
 	return ui.Fg(color).Bold(true).Render(name)
 }
@@ -291,14 +322,15 @@ func (l Leftbox) groupHeading(g Group, rows []Row) string {
 // renderRow lays out one row as fixed columns:
 //
 //	▸ [ ] Title…            tag  ▰▰▱▱ 3/5   2d late
+//
 // renderRow aligns each task's title, label, progress/schedule, and due-date columns.
 func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 	s := l.Style
-	dim := ui.Fg(s.ColorDim)
+	dim := ui.Fg(s.Theme.Dim)
 
 	marker := " "
 	if selected {
-		marker = ui.Fg(s.ColorAccent).Bold(true).Render(s.CursorChar)
+		marker = ui.Fg(s.Theme.Accent).Bold(true).Render(s.CursorChar)
 	}
 	check := s.CheckOpen
 	if r.Done {
@@ -308,7 +340,7 @@ func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 	// marker + space + checkbox + space, then 3 single-space gaps between columns.
 	titleW := width - (1 + 1 + lipgloss.Width(check) + 1) - 3 - s.TagWidth - s.ProgWidth - s.DueWidth
 
-	titleStyle := ui.Fg(s.ColorText)
+	titleStyle := ui.Fg(s.Theme.Text)
 	switch {
 	case r.Done:
 		titleStyle = dim.Strikethrough(true)
@@ -317,7 +349,7 @@ func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 	}
 	title := titleStyle.Render(ansi.Truncate(r.Title, titleW, "…"))
 
-	tagStyle, accent := dim, s.ColorAccent
+	tagStyle, accent := dim, s.Theme.Accent
 	if r.Color != "" {
 		tagStyle, accent = ui.Fg(r.Color), r.Color
 	}
@@ -334,7 +366,7 @@ func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 		prog = dim.Render(ansi.Truncate(r.Schedule, s.ProgWidth, ""))
 	}
 
-	due := ui.Fg(s.ToneColor(r.DueTone)).Render(r.Due)
+	due := ui.Fg(s.Theme.ToneColor(r.DueTone)).Render(r.Due)
 
 	return strings.Join([]string{
 		marker + " " + check + " " + ui.PadRight(title, titleW),

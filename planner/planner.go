@@ -30,14 +30,17 @@ type Planner struct {
 	Labels  backend.Labels
 }
 
-func NewPlanner(date backend.Date) Planner {
-	return Planner{
-		NotesModel:    notes.NewNotes(""),
-		CalendarModel: calendar.NewCalendar(date),
-		Style:         GetDefaultStyle(),
+func NewPlanner(theme backend.Theme, labels backend.Labels, date backend.Date) Planner {
+	p := Planner{
+		NotesModel:    notes.NewNotes(theme, ""),
+		CalendarModel: calendar.NewCalendar(theme, date),
+		Style:         NewStyle(theme),
 
-		Focus: FocusCalendar,
+		Labels: labels,
+		Focus:  FocusCalendar,
 	}
+	p.ApplyLabelColor()
+	return p
 }
 
 // Init asks the root to load the starting month, the same way a month change does.
@@ -45,9 +48,9 @@ func (p Planner) Init() tea.Cmd {
 	return nil
 }
 
-func (p Planner) View() tea.View {
+func (p Planner) View() string {
 	width := 28
-	border := ui.Fg(p.Style.BorderColor)
+	border := ui.Fg(p.Style.Theme.Border)
 
 	headerFull := ui.GenBorder(
 		ui.Fg(p.CalendarModel.GetSelectedColor()).Padding(0, 1).Bold(true).Render(p.CalendarModel.SelectedDate.Format()),
@@ -58,7 +61,7 @@ func (p Planner) View() tea.View {
 
 	calendarBorder := border.
 		Border(lipgloss.RoundedBorder(), false, true).
-		Render(p.CalendarModel.View().Content)
+		Render(p.CalendarModel.View())
 
 	footerFull := ui.GenBorder(
 		ui.Fg(p.Labels.GetColor()).Padding(0, 1).Bold(true).Render(p.Labels.GetName()),
@@ -69,7 +72,7 @@ func (p Planner) View() tea.View {
 
 	notesBorder := border.Padding(1, 1).
 		Border(lipgloss.RoundedBorder(), false, true, true, true).
-		Render(p.NotesModel.View().Content)
+		Render(p.NotesModel.View())
 
 	complete := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -79,7 +82,7 @@ func (p Planner) View() tea.View {
 		notesBorder,
 	)
 
-	return tea.NewView(complete)
+	return complete
 }
 
 // Handle on inputs:

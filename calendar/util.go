@@ -23,11 +23,11 @@ func (c Calendar) GetSelectedColor() backend.HexCode {
 		return backend.HexCode("#FFFFFF")
 	}
 	if infoAddr.IsMarked {
-		color = c.Style.ColorAccent
+		color = c.Style.Theme.Accent
 	} else if infoAddr.Date.IsWeekend() {
-		color = c.Style.ColorWeekend
+		color = c.Style.Theme.Weekend
 	} else {
-		color = c.Style.ColorWeekday
+		color = c.Style.Theme.Weekday
 	}
 
 	if infoAddr.Date.Month() != c.SelectedDate.Month() {
@@ -37,5 +37,5 @@ func (c Calendar) GetSelectedColor() backend.HexCode {
 }
 
 func (c *Calendar) SetAccent(color backend.HexCode) {
-	c.Style.ColorAccent = color
+	c.Style.Theme.Accent = color
 }

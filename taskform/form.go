@@ -38,33 +38,33 @@ type CancelMsg struct{}
 
 // Form edits the fields shared by new and existing tasks.
 type Form struct {
-	Style backend.HexCode
-	Width int
+	Theme  backend.Theme
+	Width  int
 	Height int
 	Labels backend.Labels
 
-	Task database.Task
+	Task    database.Task
 	Editing bool
-	Focus int
+	Focus   int
 
-	Title string
-	Due string
-	Notes string
-	Interval string
+	Title     string
+	Due       string
+	Notes     string
+	Interval  string
 	Recurring bool
-	Kind string
-	Error string
+	Kind      string
+	Error     string
 }
 
 // New returns a form configured with the supplied labels and default values.
-func New(labels backend.Labels, width, height int) Form {
+func New(theme backend.Theme, labels backend.Labels, width, height int) Form {
 	return Form{
-		Style: backend.HexCode("#C6D0F5"),
-		Width: width,
-		Height: height,
-		Labels: labels,
-		Task: database.Task{Horizon: "small"},
-		Kind: "daily",
+		Theme:    theme,
+		Width:    width,
+		Height:   height,
+		Labels:   labels,
+		Task:     database.Task{Horizon: "small"},
+		Kind:     "daily",
 		Interval: "3",
 	}
 }
@@ -260,8 +260,8 @@ func (f *Form) removeLastCharacter() {
 }
 
 // View renders the same editor for both adding and editing a task.
-func (f Form) View() tea.View {
-	style := ui.Fg(f.Style)
+func (f Form) View() string {
+	style := ui.Fg(f.Theme.Text)
 	title := "NEW TASK"
 	if f.Editing {
 		title = "EDIT TASK"
@@ -284,7 +284,7 @@ func (f Form) View() tea.View {
 	}
 	lines = append(lines, "", style.Render("Tab/↑↓ move · ←/→ change choices · Space toggle"), style.Render("Ctrl+S save · Esc cancel"))
 	if f.Error != "" {
-		lines = append(lines, "", ui.Fg(backend.HexCode("#E78284")).Render(f.Error))
+		lines = append(lines, "", ui.Fg(f.Theme.Late).Render(f.Error))
 	}
 
 	box := lipgloss.NewStyle().
@@ -292,8 +292,8 @@ func (f Form) View() tea.View {
 		Height(f.Height).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(string(f.Style)))
-	return tea.NewView(box.Render(strings.Join(lines, "\n")))
+		BorderForeground(lipgloss.Color(string(f.Theme.Border)))
+	return box.Render(strings.Join(lines, "\n"))
 }
 
 func (f Form) field(index int, label, value string) string {

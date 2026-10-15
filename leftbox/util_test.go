@@ -41,13 +41,13 @@ func TestDueInfo(t *testing.T) {
 	cases := []struct {
 		due      backend.Date
 		wantText string
-		wantTone Tone
+		wantTone backend.Tone
 	}{
-		{d(2024, time.January, 14), "1d late", ToneLate},
-		{d(2024, time.January, 10), "5d late", ToneLate},
-		{today, "today", ToneSoon},
-		{d(2024, time.January, 16), "tmrw", ToneSoon},
-		{d(2024, time.January, 20), "in 5d", ToneNormal},
+		{d(2024, time.January, 14), "1d late", backend.ToneLate},
+		{d(2024, time.January, 10), "5d late", backend.ToneLate},
+		{today, "today", backend.ToneSoon},
+		{d(2024, time.January, 16), "tmrw", backend.ToneSoon},
+		{d(2024, time.January, 20), "in 5d", backend.ToneNormal},
 	}
 	for _, c := range cases {
 		text, tone := DueInfo(c.due, today)

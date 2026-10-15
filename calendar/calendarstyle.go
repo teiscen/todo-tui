@@ -16,12 +16,11 @@ type CalendarStyle struct {
 	CharIcon     string
 	CharSelected string
 
-	ColorWeekday backend.HexCode
-	ColorWeekend backend.HexCode
-	ColorAccent  backend.HexCode
+	Theme backend.Theme
 }
 
-func GetDefaultStyle() CalendarStyle {
+// NewStyle builds a calendar style from the shared theme.
+func NewStyle(theme backend.Theme) CalendarStyle {
 	return CalendarStyle{
 		ColumnWidth: 4,
 		RowSpacing:  1,
@@ -31,32 +30,30 @@ func GetDefaultStyle() CalendarStyle {
 		CharIcon:     "⬤",
 		CharSelected: "|⬤ |",
 
-		ColorWeekday: backend.HexCode("#C6D0F5"),
-		ColorWeekend: backend.HexCode("#939AB7"),
-		ColorAccent:  backend.HexCode("#CA9EE6"),
+		Theme: theme,
 	}
 }
 
 func (c CalendarStyle) WeekdayStyle(isValid bool) lipgloss.Style {
-	color := c.ColorWeekday
+	color := c.Theme.Weekday
 	if !isValid {
-		color, _ = c.ColorWeekday.MuteColorTarget(backend.HexCode("#303446"), 0.8)
+		color, _ = c.Theme.Weekday.MuteColorTarget(backend.HexCode("#303446"), 0.8)
 	}
 	return ui.Fg(color).Width(c.ColumnWidth).Align(lipgloss.Center)
 }
 
 func (c CalendarStyle) WeekendStyle(isValid bool) lipgloss.Style {
-	color := c.ColorWeekend
+	color := c.Theme.Weekend
 	if !isValid {
-		color, _ = c.ColorWeekend.MuteColorTarget(backend.HexCode("#303446"), 0.8)
+		color, _ = c.Theme.Weekend.MuteColorTarget(backend.HexCode("#303446"), 0.8)
 	}
 	return ui.Fg(color).Width(c.ColumnWidth).Align(lipgloss.Center)
 }
 
 func (c CalendarStyle) AccentStyle(isValid bool) lipgloss.Style {
-	color := c.ColorAccent
+	color := c.Theme.Accent
 	if !isValid {
-		color, _ = c.ColorAccent.MuteColorTarget(backend.HexCode("#303446"), 0.8)
+		color, _ = c.Theme.Accent.MuteColorTarget(backend.HexCode("#303446"), 0.8)
 	}
 	return ui.Fg(color).Width(c.ColumnWidth).Align(lipgloss.Center)
 }

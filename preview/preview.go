@@ -22,9 +22,9 @@ type Preview struct {
 	Form *taskform.Form
 }
 
-// NewPreview creates the details panel with its default colors.
-func NewPreview() Preview {
-	return Preview{Style: GetDefaultStyle()}
+// NewPreview creates the details panel with its configured colors and size.
+func NewPreview(theme backend.Theme, width, height int) Preview {
+	return Preview{Style: NewStyle(theme, width, height)}
 }
 
 // SetForm switches the preview panel into task-editing mode.
@@ -42,14 +42,14 @@ func (p *Preview) SetTask(row leftbox.Row, ok bool) {
 func (p Preview) Init() tea.Cmd { return nil }
 
 // View renders task fields, then fits the result into the panel's fixed dimensions.
-func (p Preview) View() tea.View {
+func (p Preview) View() string {
 	if p.Form != nil {
 		return p.Form.View()
 	}
 	width := p.Style.Width
 	height := p.Style.Height
 	innerWidth := width - 4
-	border := ui.Fg(p.Style.BorderColor)
+	border := ui.Fg(p.Style.Theme.Border)
 
 	var lines []string
 	if !p.HasTask {
@@ -96,11 +96,11 @@ func (p Preview) View() tea.View {
 			lines = append(lines, "  "+r.Schedule)
 		}
 		if r.Due != "" {
-			dueStyle := ui.Fg(backend.HexCode("#939AB7"))
-			if r.DueTone == leftbox.ToneLate {
-				dueStyle = ui.Fg(backend.HexCode("#E78284"))
-			} else if r.DueTone == leftbox.ToneSoon {
-				dueStyle = ui.Fg(backend.HexCode("#E5C890"))
+			dueStyle := ui.Fg(p.Style.Theme.Dim)
+			if r.DueTone == backend.ToneLate {
+				dueStyle = ui.Fg(p.Style.Theme.Late)
+			} else if r.DueTone == backend.ToneSoon {
+				dueStyle = ui.Fg(p.Style.Theme.Soon)
 			}
 			lines = append(lines, dueStyle.Render("  "+r.Due))
 		}
@@ -113,7 +113,7 @@ func (p Preview) View() tea.View {
 			lines = append(lines, border.Render("PROGRESS"))
 			lines = append(lines, fmt.Sprintf("  %d of %d steps completed", r.StepsDone, r.StepsTotal))
 			filled := ui.BarFill(r.StepsDone, r.StepsTotal, 20)
-			lines = append(lines, "  "+ui.Fg(backend.HexCode("#CA9EE6")).Render(strings.Repeat("━", filled))+ui.Fg(backend.HexCode("#939AB7")).Render(strings.Repeat("─", 20-filled)))
+			lines = append(lines, "  "+ui.Fg(p.Style.Theme.Accent).Render(strings.Repeat("━", filled))+ui.Fg(p.Style.Theme.Dim).Render(strings.Repeat("─", 20-filled)))
 			lines = append(lines, "")
 		}
 
@@ -137,10 +137,10 @@ func (p Preview) View() tea.View {
 		Width(width).
 		Height(height-1).
 		Padding(0, 1).
-		BorderForeground(lipgloss.Color(string(p.Style.BorderColor))).
+		BorderForeground(lipgloss.Color(string(p.Style.Theme.Border))).
 		Border(lipgloss.RoundedBorder(), false, true, true, true)
 	content := box.Render(strings.Join(lines, "\n"))
-	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, top, content))
+	return lipgloss.JoinVertical(lipgloss.Left, top, content)
 }
 
 // Update is intentionally a no-op because the root model owns task selection.

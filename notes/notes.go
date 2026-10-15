@@ -19,7 +19,7 @@ type Notes struct {
 }
 
 // NewNotes creates a textarea configured for calendar-entry notes.
-func NewNotes(initText string) Notes {
+func NewNotes(theme backend.Theme, initText string) Notes {
 	ta := textarea.New()
 
 	ta.Prompt = ""
@@ -32,7 +32,7 @@ func NewNotes(initText string) Notes {
 	ta.SetWidth(WIDTH)
 	ta.SetHeight(HEIGHT)
 	ta.Blur()
-	style := GetDefaultStyle()
+	style := NewStyle(theme)
 
 	return Notes{
 		TextArea: ta,
@@ -45,10 +45,10 @@ func (n Notes) Init() tea.Cmd {
 }
 
 // View applies the configured textarea styles and returns its rendered content.
-func (n Notes) View() tea.View {
+func (n Notes) View() string {
 	// May need to check the focus status
 	n.TextArea.SetStyles(n.Style.Styles)
-	return tea.NewView(n.TextArea.View())
+	return n.TextArea.View()
 }
 
 // Update handles notes-specific shortcuts and delegates editing to the textarea.
@@ -80,6 +80,6 @@ func (n *Notes) ChangeValue(str string) {
 
 // SetAccent changes the accent color and regenerates the textarea styles.
 func (n *Notes) SetAccent(c backend.HexCode) {
-	n.Style.ColorAccent = c
+	n.Style.Theme.Accent = c
 	n.Style.Styles = n.Style.GenStyle()
 }

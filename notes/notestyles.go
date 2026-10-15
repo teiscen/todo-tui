@@ -12,13 +12,12 @@ import (
 type NotesStyle struct {
 	Styles textarea.Styles
 
-	ColorText   backend.HexCode
-	ColorAccent backend.HexCode // Meant for anything extraneous such as Line numbers or Buffer
+	Theme backend.Theme
 }
 
 func (n NotesStyle) GenStyle() textarea.Styles {
-	cText := n.ColorText
-	cAccent := n.ColorAccent
+	cText := n.Theme.Text
+	cAccent := n.Theme.Accent
 
 	cTextMute, err := cText.MuteColorTarget(backend.HexCode("#303446"), 0.4)
 	if err != nil {
@@ -63,15 +62,11 @@ func (n NotesStyle) GenStyle() textarea.Styles {
 	}
 }
 
-func GetDefaultStyle() NotesStyle {
-	cText := backend.HexCode("#C6D0F5")
-	cAccent := backend.HexCode("#CA9EE6")
-
+// NewStyle builds a notes style from the shared theme.
+func NewStyle(theme backend.Theme) NotesStyle {
 	ns := NotesStyle{
 		Styles: textarea.Styles{},
-
-		ColorText:   cText,
-		ColorAccent: cAccent,
+		Theme:  theme,
 	}
 
 	ns.Styles = ns.GenStyle()

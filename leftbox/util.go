@@ -32,14 +32,6 @@ const (
 	GroupDone
 )
 
-type Tone int
-
-const (
-	ToneNormal Tone = iota
-	ToneSoon
-	ToneLate
-)
-
 // Row is one todo, fully resolved by whoever loads it (colors, group, due text).
 // The view only draws it.
 type Row struct {
@@ -58,7 +50,7 @@ type Row struct {
 	Schedule   string // recurring rows: "M/W/F", "daily", "every 3d"
 
 	Due     string // "2d late", "today", "in 6d" ("" = nothing shown)
-	DueTone Tone
+	DueTone backend.Tone
 }
 
 // GroupFor decides which heading a one-time todo sits under.
@@ -83,17 +75,17 @@ func GroupFor(due *backend.Date, done bool, today backend.Date) Group {
 }
 
 // DueInfo is the text for the right-hand column plus how to color it.
-func DueInfo(due, today backend.Date) (string, Tone) {
+func DueInfo(due, today backend.Date) (string, backend.Tone) {
 	days := today.DaysUntil(due)
 	switch {
 	case days < 0:
-		return fmt.Sprintf("%dd late", -days), ToneLate
+		return fmt.Sprintf("%dd late", -days), backend.ToneLate
 	case days == 0:
-		return "today", ToneSoon
+		return "today", backend.ToneSoon
 	case days == 1:
-		return "tmrw", ToneSoon
+		return "tmrw", backend.ToneSoon
 	default:
-		return fmt.Sprintf("in %dd", days), ToneNormal
+		return fmt.Sprintf("in %dd", days), backend.ToneNormal
 	}
 }
 

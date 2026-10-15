@@ -20,10 +20,10 @@ type Calendar struct {
 	State        [6][7]Info
 }
 
-func NewCalendar(date backend.Date) Calendar {
+func NewCalendar(theme backend.Theme, date backend.Date) Calendar {
 	return Calendar{
 		SelectedDate: date,
-		Style:        GetDefaultStyle(),
+		Style:        NewStyle(theme),
 	}
 }
 
@@ -31,7 +31,7 @@ func (c Calendar) Init() tea.Cmd {
 	return nil
 }
 
-func (c Calendar) View() tea.View {
+func (c Calendar) View() string {
 	// Append the header
 	out := c.Style.RenderHeader()
 	// Loop through the state grid and begin rendering
@@ -64,7 +64,7 @@ func (c Calendar) View() tea.View {
 	}
 
 	cal := lipgloss.NewStyle().Padding(1, 0).Render(out)
-	return tea.NewView(cal)
+	return cal
 }
 
 // hjkl - movements
