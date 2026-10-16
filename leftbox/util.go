@@ -53,6 +53,19 @@ type Row struct {
 	DueTone backend.Tone
 }
 
+// headingColor picks the foreground color for a group heading. Unselected
+// headings are muted; a selected heading pops in its own color — overdue in the
+// late color, every other group in the normal text color.
+func headingColor(g Group, selected bool, theme backend.Theme) backend.HexCode {
+	if !selected {
+		return theme.Dim
+	}
+	if g == GroupOverdue {
+		return theme.Late
+	}
+	return theme.Text
+}
+
 // GroupFor decides which heading a one-time todo sits under.
 // due == nil means the todo has no due date.
 func GroupFor(due *backend.Date, done bool, today backend.Date) Group {
@@ -117,6 +130,19 @@ func visible(rows []Row, tab Tab, filter backend.LabelID) []Row {
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Group < out[j].Group })
 	return out
+}
+
+// groupCounts tallies visible rows per group for the heading "(n)" labels.
+// It counts every row in the tab, including those hidden by a collapsed group.
+func groupCounts(rows []Row, tab Tab, filter backend.LabelID) map[Group]int {
+	counts := map[Group]int{}
+	for _, r := range rows {
+		if r.Tab != tab || (filter != "" && r.LabelID != filter) {
+			continue
+		}
+		counts[r.Group]++
+	}
+	return counts
 }
 
 // openCounts is the number shown on each tab: rows not done yet.

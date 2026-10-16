@@ -36,6 +36,27 @@ func TestGroupFor(t *testing.T) {
 
 func datePtr(d backend.Date) *backend.Date { return &d }
 
+func TestHeadingColor(t *testing.T) {
+	theme := backend.DefaultTheme()
+	cases := []struct {
+		name     string
+		g        Group
+		selected bool
+		want     backend.HexCode
+	}{
+		{"overdue unselected", GroupOverdue, false, theme.Dim},
+		{"overdue selected", GroupOverdue, true, theme.Late},
+		{"today unselected", GroupToday, false, theme.Dim},
+		{"today selected", GroupToday, true, theme.Text},
+		{"week selected", GroupWeek, true, theme.Text},
+	}
+	for _, c := range cases {
+		if got := headingColor(c.g, c.selected, theme); got != c.want {
+			t.Errorf("%s: headingColor() = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
 func TestDueInfo(t *testing.T) {
 	today := d(2024, time.January, 15)
 	cases := []struct {

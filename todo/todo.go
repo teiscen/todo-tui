@@ -84,7 +84,7 @@ func (t *Todo) View() tea.View {
 
 	content := lipgloss.JoinHorizontal(
 		lipgloss.Top,
-		withHelp(tasks.View(), t.focus == PaneTasks, "tab/shift+tab focus · ctrl+1/2/3 pane · j/k move", "space complete · enter group · a add · e edit · f filter · [/] tabs"),
+		withHelp(tasks.View(), t.focus == PaneTasks, "tab/shift+tab focus · ctrl+1/2/3 pane · j/k move", "space complete · enter expand/collapse · a add · e edit · f filter · [/] tabs"),
 		withHelp(previewPanel.View(), t.focus == PanePreview, "tab/shift+tab focus · ctrl+1/2/3 pane", "e edit selected task · a add task"),
 		withHelp(plannerPanel.View(), t.focus == PanePlanner, "tab/shift+tab focus · ctrl+1/2/3 pane · h/j/k/l move date", "ctrl+w calendar/notes · ctrl+h/l label · ctrl+j/k month"),
 	)

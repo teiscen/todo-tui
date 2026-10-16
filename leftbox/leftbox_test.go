@@ -47,6 +47,17 @@ func keyPress(text string) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Text: text, Code: []rune(text)[0]}
 }
 
+// cursorForID returns the selectable-entry index of the task with the given ID,
+// or -1 when it is not present.
+func cursorForID(l Leftbox, id int) int {
+	for i, e := range l.selectableEntries() {
+		if !e.heading && e.row.ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
 // TestPaneSizeInvariant pins the panel to its configured width/height no matter
 // how much (or how little) content it holds, so the dashboard columns align.
 func TestPaneSizeInvariant(t *testing.T) {
@@ -66,9 +77,9 @@ func TestPaneSizeInvariant(t *testing.T) {
 	}
 }
 
-// TestHoverMatchesLayout verifies that the line a task is drawn on is exactly
-// the line HoverAt maps back to that task, and that non-item lines (headings,
-// blanks, expanded detail) never select anything.
+// TestHoverMatchesLayout verifies that the line a task or heading is drawn on
+// is exactly the line HoverAt maps back to, and that non-selectable lines
+// (blanks, expanded detail) never select anything.
 func TestHoverMatchesLayout(t *testing.T) {
 	l := testLeftbox()
 	contentW := l.Style.Width - 4
@@ -83,25 +94,27 @@ func TestHoverMatchesLayout(t *testing.T) {
 		y := 1 + len(header) + (i - start)
 		probe := l
 		probe.Cursor = -1
-		if body[i].kind == itemLine {
+		switch body[i].kind {
+		case itemLine, headingLine:
 			if !probe.HoverAt(y) {
-				t.Errorf("HoverAt(%d) = false, want true for item index %d", y, body[i].index)
+				t.Errorf("HoverAt(%d) = false, want true for selectable index %d", y, body[i].index)
 			} else if probe.Cursor != body[i].index {
 				t.Errorf("HoverAt(%d) selected %d, want %d", y, probe.Cursor, body[i].index)
 			}
-		} else if probe.HoverAt(y) {
-			t.Errorf("HoverAt(%d) = true on non-item line (kind %d), want false", y, body[i].kind)
+		default:
+			if probe.HoverAt(y) {
+				t.Errorf("HoverAt(%d) = true on non-selectable line (kind %d), want false", y, body[i].kind)
+			}
 		}
 	}
 }
 
 // TestCollapseKeepsHeadingReachable verifies a collapsed group still draws its
-// heading (with the collapsed marker) and that a selection stays valid.
+// heading (with the collapsed marker) and the heading stays cursorable so enter
+// can expand the group again.
 func TestCollapseKeepsHeadingReachable(t *testing.T) {
 	l := testLeftbox()
-	l.Cursor = 1 // the first TODAY row (ID 2)
 	l.Collapsed[GroupToday] = true
-	l.clampCursor()
 
 	contentW := l.Style.Width - 4
 	body, _ := l.layout(contentW)
@@ -128,8 +141,15 @@ func TestCollapseKeepsHeadingReachable(t *testing.T) {
 	if !collapsedHeading {
 		t.Error("collapsed TODAY heading should show the ▸ marker")
 	}
-	if _, ok := l.Selected(); !ok {
-		t.Error("Selected() = false after collapse, want a reachable row")
+
+	reachable := false
+	for _, e := range l.selectableEntries() {
+		if e.heading && e.group == GroupToday {
+			reachable = true
+		}
+	}
+	if !reachable {
+		t.Error("collapsed TODAY heading should remain in selectableEntries")
 	}
 }
 
@@ -137,7 +157,7 @@ func TestCollapseKeepsHeadingReachable(t *testing.T) {
 // when it moves, and clamps into range when it disappears.
 func TestReloadKeepsSelectionByID(t *testing.T) {
 	l := testLeftbox()
-	l.Cursor = 1 // select ID 2
+	l.Cursor = cursorForID(l, 2) // select ID 2
 
 	l.ReloadState([]Row{
 		{ID: 2, Tab: TabSmall, Group: GroupLater, Title: "two"}, // moved to the end
@@ -198,7 +218,7 @@ func TestFilterCycles(t *testing.T) {
 
 func TestSpaceEmitsToggle(t *testing.T) {
 	l := testLeftbox()
-	l.Cursor = 1 // ID 2, one-time, not done
+	l.Cursor = cursorForID(l, 2) // ID 2, one-time, not done
 	_, cmd := l.Update(keyPress(" "))
 	if cmd == nil {
 		t.Fatal("space should emit a toggle command")
@@ -216,6 +236,7 @@ func TestSpaceEmitsToggleRecurring(t *testing.T) {
 	l := New(backend.DefaultTheme(), testLabels(), 50, 20)
 	l.Tab = TabRecurring
 	l.Rows = []Row{{ID: 7, Tab: TabRecurring, Group: GroupToday, Title: "habit", Done: true}}
+	l.Cursor = cursorForID(l, 7)
 	_, cmd := l.Update(keyPress(" "))
 	if cmd == nil {
 		t.Fatal("space should emit a toggle command")
@@ -226,5 +247,37 @@ func TestSpaceEmitsToggleRecurring(t *testing.T) {
 	}
 	if toggle.ID != 7 || !toggle.Recurring || !toggle.Done {
 		t.Errorf("toggle = %+v, want ID 7, recurring, done", toggle)
+	}
+}
+
+// TestEnterCollapsesAndExpandsGroup verifies enter collapses a section and that
+// the cursor parks on the heading, where a second enter expands it again.
+func TestEnterCollapsesAndExpandsGroup(t *testing.T) {
+	l := testLeftbox()
+	l.Cursor = cursorForID(l, 2) // a TODAY task
+
+	out, cmd := l.Update(keyPress("enter"))
+	if cmd != nil {
+		t.Error("enter should not emit a command")
+	}
+	if !out.Collapsed[GroupToday] {
+		t.Fatal("enter should collapse TODAY")
+	}
+
+	// Cursor parks on the TODAY heading (not a task) after collapsing.
+	if _, ok := out.Selected(); ok {
+		t.Error("cursor should sit on a heading after collapse, not a task")
+	}
+	if g, ok := out.selectedGroup(); !ok || g != GroupToday {
+		t.Errorf("cursor group = %v (ok=%v), want TODAY after collapse", g, ok)
+	}
+
+	// A second enter on the heading expands the group back.
+	out, _ = out.Update(keyPress("enter"))
+	if out.Collapsed[GroupToday] {
+		t.Error("second enter should expand TODAY")
+	}
+	if _, ok := out.Selected(); ok {
+		t.Error("cursor should still sit on the heading after expanding")
 	}
 }

@@ -88,14 +88,18 @@ func TestKeysReachOnlyFocusedPane(t *testing.T) {
 func TestPreviewFollowsCursor(t *testing.T) {
 	td := newTestTodo(t)
 
-	td.leftboxModel.Cursor = 0
-	first, ok1 := td.leftboxModel.Selected()
+	// The first selectable entry is the group heading, so the first two tasks
+	// live at cursor indices 1 and 2.
 	td.leftboxModel.Cursor = 1
+	first, ok1 := td.leftboxModel.Selected()
+	td.leftboxModel.Cursor = 2
 	second, ok2 := td.leftboxModel.Selected()
-	td.leftboxModel.Cursor = 0
 	if !ok1 || !ok2 {
 		t.Fatal("need at least 2 selectable rows")
 	}
+
+	td.leftboxModel.Cursor = 1
+	td.syncPreview()
 	if td.previewModel.Selected.ID != first.ID {
 		t.Fatalf("initial preview ID = %d, want %d", td.previewModel.Selected.ID, first.ID)
 	}

@@ -31,21 +31,21 @@ colors:
   weekend: "#939AB7"
   
 labels:
-  selected: uni
-  order: [uni, work, gym, app, vol]
+  selected: personal
+  order: [personal, work, errands, health, home]
   info:
-    uni:
-      name: University
+    personal:
+      name: Personal
       color: "#81c8be"
     work:
       name: Work
       color: "#ca9ee6"
-    gym:
-      name: Gym
+    errands:
+      name: Errands
       color: "#ef9f76"
-    app:
-      name: Application
+    health:
+      name: Health
       color: "#babbf1"
-    vol:
-      name: Volunteer
+    home:
+      name: Home
       color: "#f2d5cf"

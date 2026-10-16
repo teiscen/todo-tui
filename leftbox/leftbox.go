@@ -20,7 +20,7 @@ type Leftbox struct {
 	Rows      []Row
 	Tab       Tab
 	Filter    backend.LabelID // "" = all labels
-	Cursor    int             // index into the visible rows
+	Cursor    int             // index into the selectable entries (headings + rows)
 	Collapsed map[Group]bool
 	Expanded  map[int]bool
 }
@@ -47,8 +47,8 @@ func (l *Leftbox) ReloadState(rows []Row) {
 	}
 	l.Rows = rows
 	if keep {
-		for i, r := range l.selectableRows() {
-			if r.ID == keepID {
+		for i, e := range l.selectableEntries() {
+			if !e.heading && e.row.ID == keepID {
 				l.Cursor = i
 				return
 			}
@@ -57,23 +57,58 @@ func (l *Leftbox) ReloadState(rows []Row) {
 	l.clampCursor()
 }
 
-// Selected returns the row at Cursor after applying the active tab and label filter.
+// Selected returns the task row at Cursor, or ok=false when the cursor sits on
+// a section heading (or out of range).
 func (l Leftbox) Selected() (Row, bool) {
-	rows := l.selectableRows()
-	if l.Cursor < 0 || l.Cursor >= len(rows) {
+	entries := l.selectableEntries()
+	if l.Cursor < 0 || l.Cursor >= len(entries) {
 		return Row{}, false
 	}
-	return rows[l.Cursor], true
+	e := entries[l.Cursor]
+	if e.heading {
+		return Row{}, false
+	}
+	return e.row, true
 }
 
-// selectableRows excludes tasks hidden inside collapsed groups.
-func (l Leftbox) selectableRows() []Row {
-	rows := visible(l.Rows, l.Tab, l.Filter)
-	out := make([]Row, 0, len(rows))
-	for _, row := range rows {
-		if !l.Collapsed[row.Group] {
-			out = append(out, row)
+// selectedGroup returns the group under the cursor, whether it is on the
+// group's heading or one of its tasks.
+func (l Leftbox) selectedGroup() (Group, bool) {
+	entries := l.selectableEntries()
+	if l.Cursor < 0 || l.Cursor >= len(entries) {
+		return 0, false
+	}
+	e := entries[l.Cursor]
+	if e.heading {
+		return e.group, true
+	}
+	return e.row.Group, true
+}
+
+// entry is one cursorable line in the task body: either a section heading or a
+// task row. Collapsed groups still contribute their heading so they can be
+// selected and expanded again.
+type entry struct {
+	heading bool
+	group   Group
+	row     Row
+}
+
+// selectableEntries lists headings and their non-collapsed tasks in display
+// order. The cursor navigates this list, so headings are reachable by j/k.
+func (l Leftbox) selectableEntries() []entry {
+	vis := visible(l.Rows, l.Tab, l.Filter)
+	out := make([]entry, 0, len(vis)+6)
+	prev := Group(-1)
+	for _, r := range vis {
+		if r.Group != prev {
+			out = append(out, entry{heading: true, group: r.Group})
+			prev = r.Group
 		}
+		if l.Collapsed[r.Group] {
+			continue
+		}
+		out = append(out, entry{row: r})
 	}
 	return out
 }
@@ -91,12 +126,12 @@ const (
 	detailLine
 )
 
-// bodyLine is one rendered line of the task body. Item lines carry the
-// selectable index; the other kinds are not interactive.
+// bodyLine is one rendered line of the task body. Heading and item lines carry
+// the selectable entry index; the other kinds are not interactive.
 type bodyLine struct {
 	kind  lineKind
 	text  string // rendered content, already styled
-	index int    // selectable index for itemLine; -1 otherwise
+	index int    // selectable entry index for headingLine/itemLine; -1 otherwise
 }
 
 // header returns the tab bar, the filter chips, and the trailing blank line
@@ -107,27 +142,35 @@ func (l Leftbox) header(contentW int) []string {
 }
 
 // layout renders the grouped task body exactly once and returns it alongside
-// the body-line index of the selected task. View and HoverAt both consume this
-// single layout, so the keyboard cursor, drawing, and mouse hover always agree.
+// the body-line index of the selected entry (heading or task). View and HoverAt
+// both consume this single layout, so the keyboard cursor, drawing, and mouse
+// hover always agree.
 func (l Leftbox) layout(contentW int) ([]bodyLine, int) {
-	vis := visible(l.Rows, l.Tab, l.Filter)
-	body := make([]bodyLine, 0, len(vis))
+	entries := l.selectableEntries()
+	counts := groupCounts(l.Rows, l.Tab, l.Filter)
+	body := make([]bodyLine, 0, len(entries))
 	cursorLine := 0
-	selectableIndex := 0
 	prev := Group(-1)
 
-	for _, r := range vis {
-		if r.Group != prev {
+	for i, e := range entries {
+		if e.heading {
 			if prev != -1 {
 				body = append(body, bodyLine{kind: blankLine})
 			}
-			body = append(body, bodyLine{kind: headingLine, text: l.groupHeading(r.Group, vis)})
-			prev = r.Group
-		}
-		if l.Collapsed[r.Group] {
+			body = append(body, bodyLine{
+				kind:  headingLine,
+				index: i,
+				text:  l.groupHeading(e.group, counts[e.group], i == l.Cursor),
+			})
+			prev = e.group
+			if i == l.Cursor {
+				cursorLine = len(body) - 1
+			}
 			continue
 		}
-		if selectableIndex == l.Cursor {
+
+		r := e.row
+		if i == l.Cursor {
 			cursorLine = len(body)
 		}
 		marker := "▸ "
@@ -136,10 +179,9 @@ func (l Leftbox) layout(contentW int) ([]bodyLine, int) {
 		}
 		body = append(body, bodyLine{
 			kind:  itemLine,
-			index: selectableIndex,
-			text:  marker + l.renderRow(r, selectableIndex == l.Cursor, contentW-2),
+			index: i,
+			text:  marker + l.renderRow(r, i == l.Cursor, contentW-2),
 		})
-		selectableIndex++
 		if l.Expanded[r.ID] {
 			body = append(body, bodyLine{kind: detailLine, text: l.detailLine(r, contentW)})
 		}
@@ -197,8 +239,8 @@ func (l Leftbox) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, top, content)
 }
 
-// HoverAt maps a terminal Y coordinate to a task row in the left panel, using
-// the same layout the View draws.
+// HoverAt maps a terminal Y coordinate to a selectable entry (heading or task)
+// in the left panel, using the same layout the View draws.
 func (l *Leftbox) HoverAt(y int) bool {
 	contentW := l.Style.Width - 4
 	header := l.header(contentW)
@@ -213,7 +255,7 @@ func (l *Leftbox) HoverAt(y int) bool {
 		return false
 	}
 	line := body[index]
-	if line.kind != itemLine || line.index == l.Cursor {
+	if (line.kind != itemLine && line.kind != headingLine) || line.index == l.Cursor {
 		return false
 	}
 	l.Cursor = line.index
@@ -250,13 +292,8 @@ func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 	case " ", "space":
 		return l, l.toggleCmd()
 	case "enter":
-		if r, ok := l.Selected(); ok {
-			if l.Collapsed == nil {
-				l.Collapsed = map[Group]bool{}
-			}
-			l.Collapsed[r.Group] = !l.Collapsed[r.Group]
-			l.clampCursor()
-		}
+		l.toggleSelectedGroup()
+		return l, nil
 	case "e":
 		if r, ok := l.Selected(); ok {
 			if l.Expanded == nil {
@@ -266,6 +303,27 @@ func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 		}
 	}
 	return l, nil
+}
+
+// toggleSelectedGroup expands or collapses the section under the cursor, then
+// parks the cursor on that section's heading so a collapse never strands it
+// inside a hidden group.
+func (l *Leftbox) toggleSelectedGroup() {
+	g, ok := l.selectedGroup()
+	if !ok {
+		return
+	}
+	if l.Collapsed == nil {
+		l.Collapsed = map[Group]bool{}
+	}
+	l.Collapsed[g] = !l.Collapsed[g]
+	for i, e := range l.selectableEntries() {
+		if e.heading && e.group == g {
+			l.Cursor = i
+			return
+		}
+	}
+	l.clampCursor()
 }
 
 // ── drawing ─────────────────────────────────────────────────────────────
@@ -334,8 +392,10 @@ func (l Leftbox) filterLines(width int) []string {
 	return lines
 }
 
-// groupHeading styles a group title using its semantic urgency.
-func (l Leftbox) groupHeading(g Group, rows []Row) string {
+// groupHeading styles a group title. Unselected headings are muted; the heading
+// under the cursor or hover pops in its own color (overdue in the late color,
+// every other group in the text color).
+func (l Leftbox) groupHeading(g Group, count int, selected bool) string {
 	s := l.Style
 	name := map[Group]string{
 		GroupOverdue: "OVERDUE",
@@ -348,21 +408,12 @@ func (l Leftbox) groupHeading(g Group, rows []Row) string {
 	if l.Tab == TabRecurring && g == GroupLater {
 		name = "OTHER DAYS"
 	}
-	count := 0
-	for _, row := range rows {
-		if row.Group == g {
-			count++
-		}
-	}
 	marker := "▾"
 	if l.Collapsed[g] {
 		marker = "▸"
 	}
 	name = fmt.Sprintf("%s %s (%d)", marker, name, count)
-	color := s.Theme.Dim
-	if g == GroupOverdue {
-		color = s.Theme.Late
-	}
+	color := headingColor(g, selected, s.Theme)
 	return ui.Fg(color).Bold(true).Render(name)
 }
 
@@ -425,9 +476,9 @@ func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 
 // ── small helpers ───────────────────────────────────────────────────────
 
-// clampCursor keeps selection within the currently visible row range.
+// clampCursor keeps selection within the currently visible entry range.
 func (l *Leftbox) clampCursor() {
-	n := len(l.selectableRows())
+	n := len(l.selectableEntries())
 	l.Cursor = max(0, min(l.Cursor, n-1))
 }
 
