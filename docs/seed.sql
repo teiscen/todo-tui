@@ -10,34 +10,34 @@ DELETE FROM todos;
 -- Dates are relative to "now", so due/overdue/streak states always look current.
 
 INSERT OR IGNORE INTO labels (name, color) VALUES
-  ('uni','#6C93C7'), ('work','#7FB88A'), ('gym','#D9777A'), ('app','#B58AC9'), ('vol','#E0A15C');
+  ('personal','#81c8be'), ('work','#ca9ee6'), ('health','#ef9f76'), ('errands','#babbf1'), ('home','#f2d5cf');
 
 -- ── One-time, small ─────────────────────────────────────────────
 INSERT INTO todos (id,title,label_id,horizon,due_date,notes) VALUES
- (1,'Write lab report','uni','small',date('now','-2 days'),'Need figures from lab 3'||char(10)||'TA office hours Fri 2-3pm'||char(10)||'Template: course wiki, week 4'),
+ (1,'Write lab report','personal','small',date('now','-2 days'),'Need figures from lab 3'||char(10)||'TA office hours Fri 2-3pm'||char(10)||'Template: course wiki, week 4'),
  (3,'Email supervisor','work','small',date('now'),''),
- (4,'Order gym shoes','gym','small',date('now','+6 days'),'Check size 10.5 in the blue pair'),
+ (4,'Order gym shoes','health','small',date('now','+6 days'),'Check size 10.5 in the blue pair'),
  (5,'Book dentist',NULL,'small',date('now','+12 days'),''),
- (6,'Pay tuition','uni','small',date('now','+20 days'),'Portal closes at 4pm on the due date'),
+ (6,'Pay tuition','personal','small',date('now','+20 days'),'Portal closes at 4pm on the due date'),
  (9,'Laundry',NULL,'small',NULL,'');
 
 -- ── One-time, long-term (with steps) ────────────────────────────
 INSERT INTO todos (id,title,label_id,horizon,due_date,notes) VALUES
- (2,'Apply to co-op','app','long',date('now','+3 days'),'Target 5 postings'),
- (7,'Midterm prep','uni','long',date('now','+8 days'),'Ch 3-7 are fair game'),
- (8,'Plan volunteer shifts','vol','long',date('now','+21 days'),'');
+ (2,'Apply to co-op','errands','long',date('now','+3 days'),'Target 5 postings'),
+ (7,'Midterm prep','personal','long',date('now','+8 days'),'Ch 3-7 are fair game'),
+ (8,'Plan volunteer shifts','home','long',date('now','+21 days'),'');
 
 -- ── Completed ──────────────────────────────────────────────────
 INSERT INTO todos (id,title,label_id,horizon,done_at) VALUES
  (10,'Renew bus pass',NULL,'small',strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')),
  (11,'Return library books',NULL,'small',strftime('%Y-%m-%dT%H:%M:%SZ','now','-3 days')),
- (16,'Submit form 3','uni','small',strftime('%Y-%m-%dT%H:%M:%SZ','now','-5 days'));
+ (16,'Submit form 3','personal','small',strftime('%Y-%m-%dT%H:%M:%SZ','now','-5 days'));
 
 -- ── Recurring ──────────────────────────────────────────────────
 INSERT INTO todos (id,title,label_id,horizon,notes) VALUES
- (12,'Gym','gym','small',''),
+ (12,'Gym','health','small',''),
  (13,'Read 20 minutes',NULL,'small',''),
- (14,'Review notes','uni','small',''),
+ (14,'Review notes','personal','small',''),
  (15,'Water plants',NULL,'small','');
 
 INSERT INTO recurrence (todo_id,kind,weekdays,interval_days,start_date) VALUES

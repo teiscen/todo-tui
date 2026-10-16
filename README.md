@@ -48,6 +48,37 @@ On first launch the SQLite database is created automatically and starts empty.
 > `./artifacts/db.sqlite3`, so it must be run from the repository root (or a
 > directory containing an `artifacts/` folder).
 
+## Seed
+
+Demo data lives in `docs/seed.sql`. Run the app once so the database file and
+tables exist, then load the demo:
+
+```sh
+go run .          # quit with Ctrl+Q once it's up
+sqlite3 artifacts/db.sqlite3 < docs/seed.sql
+```
+
+Re-running the seed command is safe — it clears the todo tables first, then
+re-inserts everything.
+
+## Wipe
+
+To start from a clean state:
+
+```sh
+# Delete the database file — it's regenerated empty on next launch.
+rm artifacts/db.sqlite3
+
+# Or keep the file and clear every row instead:
+sqlite3 artifacts/db.sqlite3 \
+  "DELETE FROM links; DELETE FROM time_log; DELETE FROM step_notes; \
+   DELETE FROM steps; DELETE FROM completions; DELETE FROM recurrence; \
+   DELETE FROM todos; DELETE FROM entries;"
+```
+
+The labels table is not cleared — on next launch `SyncLabels` repopulates it
+from `artifacts/config.yaml`.
+
 ## Configuration
 
 `artifacts/config.yaml` controls:
