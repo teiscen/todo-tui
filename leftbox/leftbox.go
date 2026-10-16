@@ -173,9 +173,13 @@ func (l Leftbox) layout(contentW int) ([]bodyLine, int) {
 		if i == l.Cursor {
 			cursorLine = len(body)
 		}
-		marker := "▸ "
-		if l.Expanded[r.ID] {
-			marker = "▾ "
+		// Only show the expand/collapse marker when the task has subtasks.
+		marker := "  "
+		if r.StepsTotal > 0 {
+			marker = "▸ "
+			if l.Expanded[r.ID] {
+				marker = "▾ "
+			}
 		}
 		body = append(body, bodyLine{
 			kind:  itemLine,
@@ -440,6 +444,8 @@ func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 
 	titleStyle := ui.Fg(s.Theme.Text)
 	switch {
+	case r.Done && selected:
+		titleStyle = titleStyle.Bold(true).Strikethrough(true)
 	case r.Done:
 		titleStyle = dim.Strikethrough(true)
 	case selected:
