@@ -160,10 +160,10 @@ func TestAddDateValueSemantics(t *testing.T) {
 
 func TestFirstDayLastDay(t *testing.T) {
 	cases := []struct {
-		d        Date
-		first    Date
-		last     Date
-		numDays  int
+		d       Date
+		first   Date
+		last    Date
+		numDays int
 	}{
 		{date(2024, time.February, 15), date(2024, time.February, 1), date(2024, time.February, 29), 29},
 		{date(2023, time.February, 15), date(2023, time.February, 1), date(2023, time.February, 28), 28},
@@ -195,13 +195,13 @@ func TestAddMonths(t *testing.T) {
 		want Date
 	}{
 		// Day clamping across month lengths.
-		{date(2024, time.January, 31), 1, date(2024, time.February, 29)},  // leap year clamp
+		{date(2024, time.January, 31), 1, date(2024, time.February, 29)}, // leap year clamp
 		{date(2023, time.January, 31), 1, date(2023, time.February, 28)},
-		{date(2024, time.March, 31), -1, date(2024, time.February, 29)},   // clamp backwards
+		{date(2024, time.March, 31), -1, date(2024, time.February, 29)}, // clamp backwards
 		{date(2024, time.May, 31), 1, date(2024, time.June, 30)},
 		// Day preserved when valid.
 		{date(2024, time.January, 15), 1, date(2024, time.February, 15)},
-		{date(2024, time.January, 31), 2, date(2024, time.March, 31)},     // 31 is valid in March
+		{date(2024, time.January, 31), 2, date(2024, time.March, 31)}, // 31 is valid in March
 		// Year boundary.
 		{date(2024, time.December, 15), 1, date(2025, time.January, 15)},
 		{date(2024, time.January, 15), -1, date(2023, time.December, 15)},
