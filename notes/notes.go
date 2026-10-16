@@ -7,10 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-var (
-	HEIGHT = 25
-	WIDTH  = 26
-)
+// WIDTH is the notes textarea width in cells, matched to the planner border.
+const WIDTH = 26
 
 // Notes wraps the textarea and its presentation style for the planner panel.
 type Notes struct {
@@ -18,8 +16,8 @@ type Notes struct {
 	Style    NotesStyle
 }
 
-// New creates a textarea configured for calendar-entry notes.
-func New(theme backend.Theme, initText string) Notes {
+// New creates a textarea configured for calendar-entry notes, sized to height.
+func New(theme backend.Theme, initText string, height int) Notes {
 	ta := textarea.New()
 
 	ta.Prompt = ""
@@ -30,7 +28,7 @@ func New(theme backend.Theme, initText string) Notes {
 
 	ta.SetValue(initText)
 	ta.SetWidth(WIDTH)
-	ta.SetHeight(HEIGHT)
+	ta.SetHeight(height)
 	ta.Blur()
 	style := NewStyle(theme)
 

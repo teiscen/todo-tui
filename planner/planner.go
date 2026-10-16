@@ -30,11 +30,22 @@ type Planner struct {
 	Labels  backend.Labels
 }
 
-// New builds a planner pane composing the calendar and notes sub-panes.
-func New(theme backend.Theme, labels backend.Labels, date backend.Date) Planner {
+// New builds a planner pane composing the calendar and notes sub-panes, sized
+// so the whole column matches the requested height.
+func New(theme backend.Theme, labels backend.Labels, date backend.Date, height int) Planner {
+	cal := calendar.New(theme, date)
+	// Fixed chrome around the notes box: the header and footer GenBorders
+	// (1 line each) plus the notes box's vertical padding (2) and bottom
+	// border (1). The notes textarea fills whatever height is left over.
+	const chrome = 1 + 1 + 2 + 1
+	notesHeight := height - lipgloss.Height(cal.View()) - chrome
+	if notesHeight < 1 {
+		notesHeight = 1
+	}
+
 	p := Planner{
-		NotesModel:    notes.New(theme, ""),
-		CalendarModel: calendar.New(theme, date),
+		NotesModel:    notes.New(theme, "", notesHeight),
+		CalendarModel: cal,
 		Style:         NewStyle(theme),
 
 		Labels: labels,

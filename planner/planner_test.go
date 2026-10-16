@@ -7,6 +7,8 @@ import (
 	"time"
 
 	backend "todo-tui/backend"
+
+	"charm.land/lipgloss/v2"
 )
 
 func testPlanner() Planner {
@@ -14,7 +16,7 @@ func testPlanner() Planner {
 		Selected: "work",
 		Order:    []backend.LabelID{"work"},
 		Info:     map[backend.LabelID]backend.LabelInfo{"work": {Name: "Work", Color: "#ca9ee6"}},
-	}, backend.NewDate(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)))
+	}, backend.NewDate(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)), 43)
 }
 
 // borderPrefix is the ANSI color sequence immediately before a vertical border
@@ -39,5 +41,12 @@ func TestViewMutesBordersWhenDeselected(t *testing.T) {
 	p.Style.Theme.Border = backend.HexCode("#737994")
 	if prefix := borderPrefix(p.Style.Theme.Border); !strings.Contains(p.View(), prefix) {
 		t.Errorf("calendar/notes border not muted with %q when deselected", prefix)
+	}
+}
+
+func TestViewHeightMatchesRequest(t *testing.T) {
+	p := testPlanner()
+	if h := lipgloss.Height(p.View()); h != 43 {
+		t.Errorf("planner height = %d, want 43", h)
 	}
 }

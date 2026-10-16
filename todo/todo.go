@@ -3,6 +3,7 @@ package todo
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"todo-tui/backend"
@@ -12,10 +13,10 @@ import (
 	"todo-tui/planner"
 	"todo-tui/preview"
 	"todo-tui/taskform"
+	"todo-tui/ui"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // Todo is the root model. It coordinates the dashboard panels and owns
@@ -49,7 +50,7 @@ func NewTodo(cfg config.Config, db *sql.DB) *Todo {
 	t := &Todo{
 		db:           db,
 		cfg:          cfg,
-		plannerModel: planner.New(theme, cfg.Labels, backend.NewDate(time.Now())),
+		plannerModel: planner.New(theme, cfg.Labels, backend.NewDate(time.Now()), cfg.Layout.Tasks.Height),
 		leftboxModel: leftbox.New(theme, cfg.Labels, cfg.Layout.Tasks.Width, cfg.Layout.Tasks.Height),
 		previewModel: preview.New(theme, cfg.Layout.Preview.Width, cfg.Layout.Preview.Height),
 		form:         taskform.New(theme, cfg.Labels, cfg.Layout.Editor.Width, cfg.Layout.Editor.Height),
@@ -101,7 +102,7 @@ func (t *Todo) panelBorder(pane Pane, activeColor string) backend.HexCode {
 }
 
 // withHelp places movement hints and panel-specific shortcuts below the panel,
-// clipped to the panel's width so they never widen the column past its border
+// wrapped to the panel's width so they never widen the column past its border
 // and open a gap between panels.
 func withHelp(content string, focused bool, movement, specific string) string {
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#737994"))
@@ -109,10 +110,26 @@ func withHelp(content string, focused bool, movement, specific string) string {
 		style = style.Foreground(lipgloss.Color("#C6D0F5"))
 	}
 	width := lipgloss.Width(content)
-	clip := func(s string) string {
-		return style.Render(ansi.Truncate(s, width, "…"))
+
+	lines := []string{content}
+	for _, hint := range []string{movement, specific} {
+		for _, l := range wrapHelp(hint, width) {
+			lines = append(lines, style.Render(l))
+		}
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, content, clip(movement), clip(specific))
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// wrapHelp breaks a "·"-separated hint string into lines that fit width, keeping
+// each command group ("x desc") together.
+func wrapHelp(s string, width int) []string {
+	var parts []string
+	for _, p := range strings.Split(s, "·") {
+		if p = strings.TrimSpace(p); p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return ui.WrapJoin(parts, " · ", width)
 }
 
 // Update routes messages to the active panel and handles database-backed task actions.

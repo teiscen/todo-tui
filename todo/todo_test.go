@@ -27,9 +27,9 @@ func testLabels() backend.Labels {
 func testConfig() config.Config {
 	return config.Config{
 		Layout: config.LayoutConfig{
-			Tasks:   config.PanelSize{Width: 50, Height: 20},
-			Preview: config.PanelSize{Width: 50, Height: 20},
-			Editor:  config.PanelSize{Width: 50, Height: 20},
+			Tasks:   config.PanelSize{Width: 50, Height: 43},
+			Preview: config.PanelSize{Width: 50, Height: 43},
+			Editor:  config.PanelSize{Width: 50, Height: 43},
 		},
 		Labels: testLabels(),
 	}
@@ -107,14 +107,15 @@ func TestPreviewFollowsCursor(t *testing.T) {
 	}
 }
 
-// TestPaneHeightsMatch verifies the tasks and preview panes render to the same
-// configured height so their borders stay aligned.
+// TestPaneHeightsMatch verifies the tasks, preview, and planner panes all
+// render to the same configured height so their borders stay aligned.
 func TestPaneHeightsMatch(t *testing.T) {
 	td := newTestTodo(t)
 	tasksH := lipgloss.Height(td.leftboxModel.View())
 	previewH := lipgloss.Height(td.previewModel.View())
-	if tasksH != previewH {
-		t.Errorf("tasks height %d != preview height %d", tasksH, previewH)
+	plannerH := lipgloss.Height(td.plannerModel.View())
+	if tasksH != previewH || tasksH != plannerH {
+		t.Errorf("pane heights differ: tasks=%d preview=%d planner=%d", tasksH, previewH, plannerH)
 	}
 	if tasksH != td.leftboxModel.Style.Height {
 		t.Errorf("tasks height %d != configured %d", tasksH, td.leftboxModel.Style.Height)
@@ -166,12 +167,20 @@ func TestTypingGuardReservesKeysForEditor(t *testing.T) {
 	}
 }
 
-// TestWithHelpClipsToPaneWidth verifies the keyboard hints below a panel never
-// widen the column past the panel border (the gap regression).
-func TestWithHelpClipsToPaneWidth(t *testing.T) {
+// TestWithHelpWrapsToPaneWidth verifies the keyboard hints below a panel wrap
+// (instead of widening the column or being truncated).
+func TestWithHelpWrapsToPaneWidth(t *testing.T) {
 	content := strings.Repeat("x", 30)
-	out := withHelp(content, false, strings.Repeat("m", 100), strings.Repeat("s", 100))
+	movement := "a one · b two · c three · d four"
+	specific := "e five · f six · g seven"
+	out := withHelp(content, false, movement, specific)
+
 	if w := lipgloss.Width(out); w != 30 {
 		t.Errorf("withHelp width = %d, want 30", w)
+	}
+	for _, want := range []string{"a one", "b two", "c three", "d four", "e five", "f six", "g seven"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("withHelp output missing %q (truncated?)", want)
+		}
 	}
 }
