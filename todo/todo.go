@@ -15,6 +15,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Todo is the root model. It coordinates the dashboard panels and owns
@@ -63,14 +64,10 @@ func NewTodo(cfg config.Config, db *sql.DB) *Todo {
 	return t
 }
 
-// Init asks the planner to load its initially selected date and label.
+// Init asks the planner to load its initially selected date and label off the
+// main loop.
 func (t *Todo) Init() tea.Cmd {
-	return func() tea.Msg {
-		return planner.ChangeCalendarMsg{
-			LabelID: *t.plannerModel.SelectedLabel(),
-			NewDate: *t.plannerModel.SelectedDate(),
-		}
-	}
+	return t.loadPlanner(*t.plannerModel.SelectedLabel(), *t.plannerModel.SelectedDate())
 }
 
 // View joins the task list, selected-task preview (or editor), and planner.
@@ -103,13 +100,19 @@ func (t *Todo) panelBorder(pane Pane, activeColor string) backend.HexCode {
 	return backend.HexCode("#737994")
 }
 
-// withHelp places movement hints and panel-specific shortcuts below the panel.
+// withHelp places movement hints and panel-specific shortcuts below the panel,
+// clipped to the panel's width so they never widen the column past its border
+// and open a gap between panels.
 func withHelp(content string, focused bool, movement, specific string) string {
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#737994"))
 	if focused {
 		style = style.Foreground(lipgloss.Color("#C6D0F5"))
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, content, style.Render(movement), style.Render(specific))
+	width := lipgloss.Width(content)
+	clip := func(s string) string {
+		return style.Render(ansi.Truncate(s, width, "…"))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, content, clip(movement), clip(specific))
 }
 
 // Update routes messages to the active panel and handles database-backed task actions.
@@ -152,72 +155,105 @@ func (t *Todo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, nil
 
 	case planner.ChangeCalendarMsg:
-		t.ReloadPlannerState(m.LabelID, m.NewDate)
-		return t, nil
+		return t, t.loadPlanner(m.LabelID, m.NewDate)
 
 	case planner.SaveEntryMsg:
 		t.AddEntry(m.Label, m.Date, m.Msg)
-		t.ReloadPlannerState(m.Label, m.Date)
-		return t, nil
+		return t, t.loadPlanner(m.Label, m.Date)
 
 	case planner.RemoveEntryMsg:
 		t.RemoveEntry(m.Label, m.Date)
-		t.ReloadPlannerState(m.Label, m.Date)
+		return t, t.loadPlanner(m.Label, m.Date)
+
+	case plannerLoadedMsg:
+		// Drop stale results: the user may have moved on while the query ran.
+		if m.LabelID != *t.plannerModel.SelectedLabel() || m.NewDate != *t.plannerModel.SelectedDate() {
+			return t, nil
+		}
+		t.err = nil
+		t.plannerModel.ReloadState(m.sDate, m.entries)
+		return t, nil
+
+	case errMsg:
+		t.err = m.err
 		return t, nil
 	}
 
-	// While editing, reserve keyboard input for the form instead of the other panels.
+	// While a text field owns the keyboard, forward every key to it instead of
+	// interpreting navigation shortcuts.
+	if t.typing() {
+		return t, t.forwardToFocused(msg)
+	}
+
+	// Global navigation and task shortcuts.
+	if key, ok := msg.(tea.KeyPressMsg); ok {
+		if handled, cmd := t.handleKey(key); handled {
+			return t, cmd
+		}
+	}
+
+	return t, t.forwardToFocused(msg)
+}
+
+// typing reports whether a text field (the task editor or the planner's notes)
+// owns the keyboard.
+func (t *Todo) typing() bool {
+	return t.formActive || t.plannerModel.NotesModel.TextArea.Focused()
+}
+
+// handleKey applies pane navigation and task shortcuts. It reports false for
+// keys that should be forwarded to the focused pane instead.
+func (t *Todo) handleKey(key tea.KeyPressMsg) (bool, tea.Cmd) {
+	switch key.String() {
+	case "tab":
+		t.focus = (t.focus + 1) % paneCount
+		return true, nil
+	case "shift+tab":
+		t.focus = (t.focus + paneCount - 1) % paneCount
+		return true, nil
+	case "ctrl+1":
+		t.focus = PaneTasks
+		return true, nil
+	case "ctrl+2":
+		t.focus = PanePreview
+		return true, nil
+	case "ctrl+3":
+		t.focus = PanePlanner
+		return true, nil
+	case "a":
+		if t.focus == PaneTasks || t.focus == PanePreview {
+			t.beginAdd()
+			return true, nil
+		}
+		return false, nil
+	case "e":
+		if t.focus == PaneTasks || t.focus == PanePreview {
+			t.beginEdit()
+			return true, nil
+		}
+		return false, nil
+	}
+	return false, nil
+}
+
+// forwardToFocused passes a message to whatever owns the keyboard: the editor
+// while it is open, then the focused pane.
+func (t *Todo) forwardToFocused(msg tea.Msg) tea.Cmd {
 	if t.formActive {
 		var cmd tea.Cmd
 		t.form, cmd = t.form.Update(msg)
 		t.previewModel.SetForm(&t.form)
-		return t, cmd
+		return cmd
 	}
-
-	if key, ok := msg.(tea.KeyPressMsg); ok {
-		switch key.String() {
-		case "tab":
-			t.focus = (t.focus + 1) % paneCount
-			return t, nil
-		case "shift+tab":
-			t.focus = (t.focus + paneCount - 1) % paneCount
-			return t, nil
-		case "ctrl+1":
-			t.focus = PaneTasks
-			return t, nil
-		case "ctrl+2":
-			t.focus = PanePreview
-			return t, nil
-		case "ctrl+3":
-			t.focus = PanePlanner
-			return t, nil
-		case "a":
-			if t.focus == PaneTasks || t.focus == PanePreview {
-				t.beginAdd()
-				return t, nil
-			}
-		case "e":
-			if t.focus == PaneTasks || t.focus == PanePreview {
-				t.beginEdit()
-				return t, nil
-			}
-		}
-		var cmd tea.Cmd
-		switch t.focus {
-		case PaneTasks:
-			t.leftboxModel, cmd = t.leftboxModel.Update(msg)
-			t.syncPreview()
-		case PanePlanner:
-			t.plannerModel, cmd = t.plannerModel.Update(msg)
-		}
-		return t, cmd
-	}
-
 	var cmd tea.Cmd
-	if t.focus == PanePlanner {
+	switch t.focus {
+	case PaneTasks:
+		t.leftboxModel, cmd = t.leftboxModel.Update(msg)
+		t.syncPreview()
+	case PanePlanner:
 		t.plannerModel, cmd = t.plannerModel.Update(msg)
 	}
-	return t, cmd
+	return cmd
 }
 
 // beginAdd opens a blank form, defaulting to the currently selected label.

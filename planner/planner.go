@@ -51,7 +51,7 @@ func (p Planner) Init() tea.Cmd {
 
 func (p Planner) View() string {
 	width := 28
-	border := ui.Fg(p.Style.Theme.Border)
+	border := ui.Fg(p.Style.Theme.Border).BorderForeground(lipgloss.Color(string(p.Style.Theme.Border)))
 
 	headerFull := ui.GenBorder(
 		ui.Fg(p.CalendarModel.GetSelectedColor()).Padding(0, 1).Bold(true).Render(p.CalendarModel.SelectedDate.Format()),
