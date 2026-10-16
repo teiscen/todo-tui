@@ -1,11 +1,10 @@
 package planner
 
 import (
-	"strings"
-
 	backend "todo-tui/backend"
 	"todo-tui/calendar"
 	"todo-tui/notes"
+	"todo-tui/ui"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -31,77 +30,61 @@ type Planner struct {
 	Labels  backend.Labels
 }
 
-func NewPlanner(date backend.Date) Planner {
-	return Planner{
-		NotesModel:    notes.NewNotes(""),
-		CalendarModel: calendar.NewCalendar(date),
-		Style:         GetDefaultStyle(),
-
-		Focus: FocusCalendar,
+// New builds a planner pane composing the calendar and notes sub-panes, sized
+// so the whole column matches the requested height.
+func New(theme backend.Theme, labels backend.Labels, date backend.Date, height int) Planner {
+	cal := calendar.New(theme, date)
+	// Fixed chrome around the notes box: the header and footer GenBorders
+	// (1 line each) plus the notes box's vertical padding (2) and bottom
+	// border (1). The notes textarea fills whatever height is left over.
+	const chrome = 1 + 1 + 2 + 1
+	notesHeight := height - lipgloss.Height(cal.View()) - chrome
+	if notesHeight < 1 {
+		notesHeight = 1
 	}
+
+	p := Planner{
+		NotesModel:    notes.New(theme, "", notesHeight),
+		CalendarModel: cal,
+		Style:         NewStyle(theme),
+
+		Labels: labels,
+		Focus:  FocusCalendar,
+	}
+	p.ApplyLabelColor()
+	return p
 }
 
 // Init asks the root to load the starting month, the same way a month change does.
 func (p Planner) Init() tea.Cmd {
-	// d := p.CalendarModel.SelectedDate
-	// return func() tea.Msg { return UpdateMonthMsg{d} }
 	return nil
 }
 
-func (p Planner) View() tea.View {
-	type posn int
-	const (
-		top posn = iota
-		mid
-		bot
-	)
+func (p Planner) View() string {
 	width := 28
-	genBreak := func(text string, style lipgloss.Style, posn posn) string {
-		text = style.Render(text)
+	border := ui.Fg(p.Style.Theme.Border).BorderForeground(lipgloss.Color(string(p.Style.Theme.Border)))
 
-		var paddingL, paddingR, left, right string
-		pad := strings.Repeat("─", max(0, (width-lipgloss.Width(text))/2))
-		if lipgloss.Width(text)%2 == 1 {
-			paddingR = "─"
-		}
-		paddingL += pad
-		paddingR += pad
-
-		switch posn {
-		case top:
-			left = "╭" + paddingL
-			right = paddingR + "╮"
-		case mid:
-			left = "├" + paddingL
-			right = paddingR + "┤"
-		case bot:
-			left = "╰" + paddingL
-			right = paddingR + "╯"
-		}
-
-		borderStyle := p.Style.BorderColor.ToStyle()
-		return borderStyle.Render(left) + text + borderStyle.Render(right)
-	}
-
-	headerFull := genBreak(
-		p.CalendarModel.SelectedDate.Format(),
-		p.CalendarModel.GetSelectedColor().ToStyle().Padding(0, 1).Bold(true),
-		top,
+	headerFull := ui.GenBorder(
+		ui.Fg(p.CalendarModel.GetSelectedColor()).Padding(0, 1).Bold(true).Render(p.CalendarModel.SelectedDate.Format()),
+		border,
+		ui.Top,
+		width,
 	)
 
-	calendarBorder := p.Style.BorderColor.ToStyle().
+	calendarBorder := border.
 		Border(lipgloss.RoundedBorder(), false, true).
-		Render(p.CalendarModel.View().Content)
+		Render(p.CalendarModel.View())
 
-	footerFull := genBreak(
-		p.Labels.GetName(),
-		p.Labels.GetColor().ToStyle().Padding(0, 1).Bold(true),
-		mid,
+	footerFull := ui.GenBorder(
+		ui.Fg(p.Labels.GetColor()).Padding(0, 1).Bold(true).Render(p.Labels.GetName()),
+		border,
+		ui.Mid,
+		width,
 	)
 
-	notesBorder := p.Style.BorderColor.ToStyle().Padding(1, 1).
+	notesBorder := border.Padding(1, 1).
 		Border(lipgloss.RoundedBorder(), false, true, true, true).
-		Render(p.NotesModel.View().Content)
+		Render(p.NotesModel.View())
 
 	complete := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -111,7 +94,7 @@ func (p Planner) View() tea.View {
 		notesBorder,
 	)
 
-	return tea.NewView(complete)
+	return complete
 }
 
 // Handle on inputs:
@@ -132,12 +115,6 @@ func (p Planner) Update(msg tea.Msg) (Planner, tea.Cmd) {
 			return p, p.UpdateMonth(true)
 		case "ctrl+k": // previous month
 			return p, p.UpdateMonth(false)
-		// case "ctrl+r": // save the entry
-		// 	return p, p.SaveEntry()
-		// case "x": // mark/unmark the day, only when the calendar has focus
-		// if p.Focus == FocusCalendar {
-		// 	return p, p.ToggleEntry()
-		// }
 		case "ctrl+c":
 			return p, tea.Quit
 		}
@@ -190,14 +167,4 @@ func (p Planner) Update(msg tea.Msg) (Planner, tea.Cmd) {
 		}
 	}
 	return p, cmd
-
-	// The calendar moved on its own (h/j/k/l). If it left the month, ask the
-	// root to reload the grid, which also refreshes Notes. Otherwise only the
-	// selected day changed, so show that day's entry.
-	// if cur := p.CalendarModel.SelectedDate; cur != prev {
-	// 	if cur.Year != prev.Year || cur.Month != prev.Month {
-	// 		cmd = tea.Batch(cmd, func() tea.Msg { return UpdateMonthMsg{cur} })
-	// 	} else {
-	// 		p.SyncNotes()
-	// 	}
 }

@@ -2,12 +2,18 @@ package preview
 
 import "todo-tui/backend"
 
+// PreviewStyle contains the preview panel's size and visual styling.
 type PreviewStyle struct {
-	BorderColor backend.HexCode
+	Width  int
+	Height int
+	Theme  backend.Theme
 }
 
-func GetDefaultStyle() PreviewStyle {
+// NewStyle builds a preview style from the shared theme and dimensions.
+func NewStyle(theme backend.Theme, width, height int) PreviewStyle {
 	return PreviewStyle{
-		BorderColor: backend.HexCode("#c6d0h5"),
+		Width:  width,
+		Height: height,
+		Theme:  theme,
 	}
 }

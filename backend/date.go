@@ -4,109 +4,101 @@ import (
 	"time"
 )
 
+// Date is a calendar day with no time of day. It is always stored as midnight
+// UTC, so two Dates for the same day compare equal with == as well as Equal.
+// Every method returns a new Date; none of them modify the receiver.
 type Date struct {
 	t time.Time
 }
 
-func (d Date) GetTime() time.Time {
-	return d.t
+func NewDate(t time.Time) Date {
+	return Date{t: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)}
 }
 
-func NewDate(t time.Time) Date {
-	return Date{t: t}
+func (d Date) Year() int {
+	return d.t.Year()
+}
+
+func (d Date) Month() int {
+	return int(d.t.Month())
+}
+
+func (d Date) Day() int {
+	return d.t.Day()
+}
+
+// Weekday returns the day of the week (Sunday = 0, Saturday = 6).
+func (d Date) Weekday() int {
+	return int(d.t.Weekday())
 }
 
 func (d Date) IsWeekend() bool {
-	if d.Weekday() == 0 || d.Weekday() == 6 {
-		return true
-	}
-	return false
+	return d.Weekday() == 0 || d.Weekday() == 6
 }
 
-func (c Date) Year() int {
-	return c.t.Year()
+// FirstDay returns the 1st of the month containing d.
+func (d Date) FirstDay() Date {
+	return Date{t: time.Date(d.Year(), time.Month(d.Month()), 1, 0, 0, 0, 0, time.UTC)}
 }
 
-func (c Date) Month() int {
-	return int(c.t.Month())
+// LastDay returns the last day of the month containing d.
+func (d Date) LastDay() Date {
+	return Date{t: time.Date(d.Year(), time.Month(d.Month()+1), 0, 0, 0, 0, 0, time.UTC)}
 }
 
-func (c Date) Day() int {
-	return c.t.Day()
+// NumDays is the number of days in d's month.
+func (d Date) NumDays() int {
+	return d.LastDay().Day()
 }
 
-func (c Date) Location() *time.Location {
-	return c.t.Location()
+// AddDate follows time.AddDate: a day that doesn't exist rolls into the next month.
+func (d Date) AddDate(y, m, days int) Date {
+	return Date{t: d.t.AddDate(y, m, days)}
 }
 
-func (c Date) Weekday() int {
-	return int(c.t.Weekday())
+// AddMonths moves by whole months and clamps the day instead of rolling over,
+// so Jan 31 + 1 month is Feb 28, not Mar 3.
+func (d Date) AddMonths(n int) Date {
+	first := d.FirstDay().AddDate(0, n, 0)
+	return first.AddDate(0, 0, min(d.Day(), first.NumDays())-1)
 }
 
-func (c Date) NumDays() int {
-	c.LastDay()
-	return c.t.Day()
-}
-
-func (c *Date) LastDay() {
-	c.t = time.Date(
-		c.Year(), time.Month(c.Month()+1), 0,
-		0, 0, 0, 0, c.Location(),
-	)
-}
-
-func (c *Date) FirstDay() {
-	c.t = time.Date(
-		c.Year(), time.Month(c.Month()), 1,
-		0, 0, 0, 0, c.Location(),
-	)
-}
-
-func (c *Date) ChangeDate(y, m, d int) {
-	c.t = c.t.AddDate(y, m, d)
-}
-
-func (c Date) AddDate(y, m, d int) Date {
-	c.ChangeDate(y, m, d)
-	return c
-}
-
-func (c Date) Format() string {
-	return c.t.Format("January 2")
+func (d Date) Format() string {
+	return d.t.Format("January 2")
 }
 
 // FormatSQL returns a zero-padded YYYY-MM-DD string, so text comparisons
 // (BETWEEN, ORDER BY) in SQLite sort chronologically.
-func (c Date) FormatSQL() string {
-	return c.t.Format("2006-01-02")
+func (d Date) FormatSQL() string {
+	return d.t.Format("2006-01-02")
 }
 
 // Key returns a timezone-independent key for map lookups (YYYY-MM-DD).
-func (c Date) Key() string {
-	return c.t.Format("2006-01-02")
+func (d Date) Key() string {
+	return d.t.Format("2006-01-02")
 }
 
-// Equal reports whether c and other represent the same calendar date (ignores timezone).
-func (c Date) Equal(other Date) bool {
-	return c.Year() == other.Year() && c.Month() == other.Month() && c.Day() == other.Day()
+// Equal reports whether d and other represent the same calendar date.
+func (d Date) Equal(other Date) bool {
+	return d.Compare(other) == 0
 }
 
-// Compare returns -1 if c < other, 0 if equal, 1 if c > other (date-only).
-func (c Date) Compare(other Date) int {
-	if c.Year() != other.Year() {
-		if c.Year() < other.Year() {
+// Compare returns -1 if d < other, 0 if equal, 1 if d > other (date-only).
+func (d Date) Compare(other Date) int {
+	if d.Year() != other.Year() {
+		if d.Year() < other.Year() {
 			return -1
 		}
 		return 1
 	}
-	if c.Month() != other.Month() {
-		if c.Month() < other.Month() {
+	if d.Month() != other.Month() {
+		if d.Month() < other.Month() {
 			return -1
 		}
 		return 1
 	}
-	if c.Day() != other.Day() {
-		if c.Day() < other.Day() {
+	if d.Day() != other.Day() {
+		if d.Day() < other.Day() {
 			return -1
 		}
 		return 1
@@ -114,21 +106,21 @@ func (c Date) Compare(other Date) int {
 	return 0
 }
 
-// Before reports whether c is before other (date-only).
-func (c Date) Before(other Date) bool {
-	return c.Compare(other) < 0
+// Before reports whether d is before other (date-only).
+func (d Date) Before(other Date) bool {
+	return d.Compare(other) < 0
 }
 
-// After reports whether c is after other (date-only).
-func (c Date) After(other Date) bool {
-	return c.Compare(other) > 0
+// After reports whether d is after other (date-only).
+func (d Date) After(other Date) bool {
+	return d.Compare(other) > 0
 }
 
-// DaysUntil returns the number of days from c to other (positive if other is in the future).
-func (c Date) DaysUntil(other Date) int {
-	cMid := time.Date(c.Year(), time.Month(c.Month()), c.Day(), 0, 0, 0, 0, time.UTC)
+// DaysUntil returns the number of days from d to other (positive if other is in the future).
+func (d Date) DaysUntil(other Date) int {
+	dMid := time.Date(d.Year(), time.Month(d.Month()), d.Day(), 0, 0, 0, 0, time.UTC)
 	oMid := time.Date(other.Year(), time.Month(other.Month()), other.Day(), 0, 0, 0, 0, time.UTC)
-	return int(oMid.Sub(cMid).Hours() / 24)
+	return int(oMid.Sub(dMid).Hours() / 24)
 }
 
 func ParseSQL(str string) (Date, error) {

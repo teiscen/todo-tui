@@ -23,12 +23,11 @@ func (c Calendar) GetSelectedColor() backend.HexCode {
 		return backend.HexCode("#FFFFFF")
 	}
 	if infoAddr.IsMarked {
-		color = c.Style.ColorAccent
-	} else if infoAddr.Date.Day() == 0 ||
-		infoAddr.Date.Day() == 6 {
-		color = c.Style.ColorWeekend
+		color = c.Style.Theme.Accent
+	} else if infoAddr.Date.IsWeekend() {
+		color = c.Style.Theme.Weekend
 	} else {
-		color = c.Style.ColorWeekday
+		color = c.Style.Theme.Weekday
 	}
 
 	if infoAddr.Date.Month() != c.SelectedDate.Month() {
@@ -38,31 +37,5 @@ func (c Calendar) GetSelectedColor() backend.HexCode {
 }
 
 func (c *Calendar) SetAccent(color backend.HexCode) {
-	c.Style.ColorAccent = color
+	c.Style.Theme.Accent = color
 }
-
-// func (c *Calendar) UpdateGrid(hasEntry func(backend.Date) bool) {
-// 	checkValid := func(target backend.Date) bool {
-// 		return target.Month == c.SelectedDate.Month
-// 	}
-//
-// 	checkMarked := func(target backend.Date) bool {
-// 		return hasEntry(target)
-// 	}
-//
-// 	date := c.SelectedDate.GridStart()
-//
-// 	for row := range c.State {
-// 		for col := range c.State[row] {
-// 			cell := &c.State[row][col]
-//
-// 			*cell = Info{
-// 				Date:     date,
-// 				IsValid:  checkValid(date),
-// 				IsMarked: checkMarked(date),
-// 			}
-//
-// 			date = date.AddDate(0, 0, 1)
-// 		}
-// 	}
-// }

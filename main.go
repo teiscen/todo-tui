@@ -34,17 +34,6 @@ func run() error {
 		return fmt.Errorf("create tables: %w", err)
 	}
 
-	// Seed with the mock calendar until entries can be created in the app.
-	// n, err := database.LabelCount(db)
-	// if err != nil {
-	// 	return err
-	// }
-	// if n == 0 {
-	// 	if err := database.PopulateFromCalendar(db, cfg.Calendar); err != nil {
-	// 		return err
-	// 	}
-	// }
-
 	_, err = tea.NewProgram(todo.NewTodo(cfg, db)).Run()
 	return err
 }

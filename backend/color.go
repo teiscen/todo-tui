@@ -5,25 +5,11 @@ import (
 	"math"
 	"strconv"
 	"strings"
-
-	lipgloss "charm.land/lipgloss/v2"
 )
 
-type (
-	ColorID string
-	HexCode string
-	Colors  map[ColorID]HexCode
-
-	ColoredString struct {
-		Str string
-		Hex HexCode
-	}
-)
-
-// Temporary
-func (c HexCode) ToStyle() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(string(c)))
-}
+// HexCode is a "#RRGGBB" color. Turning one into a lipgloss style is the job
+// of the ui package, so backend has no rendering dependencies.
+type HexCode string
 
 func (c HexCode) HexCodeToInt() (int, error) {
 	str := strings.TrimPrefix(string(c), "#")
@@ -61,31 +47,6 @@ func CombineRGB(r, g, b int) (HexCode, error) {
 
 	// %06X:0-pad left with 0 not space, 6-how much to pad, X-convert int to Hex
 	return HexCode(fmt.Sprintf("#%06X", combined)), nil
-}
-
-// Pull the colors chanel towards the middle to the avg value of the original colors
-func (c HexCode) MuteColorAvg() (HexCode, error) {
-	r, g, b, err := c.ParseRGB()
-	if err != nil {
-		return HexCode("#FFFFFF"), err
-	}
-
-	avg := (r + g + b) / 3
-	adjust := func(i int) int {
-		adjustment := float64(i-avg) * (-0.5)
-		return i + int(adjustment)
-	}
-
-	r = adjust(r)
-	g = adjust(g)
-	b = adjust(b)
-
-	newHexCode, err := CombineRGB(r, g, b)
-	if err != nil {
-		return HexCode("#FFFFFF"), err
-	}
-
-	return newHexCode, nil
 }
 
 // Averages out the colors, but inteded to be used with a muted color

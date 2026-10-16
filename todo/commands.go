@@ -3,61 +3,48 @@ package todo
 import (
 	"todo-tui/backend"
 	"todo-tui/database"
+
+	tea "charm.land/bubbletea/v2"
 )
 
-func (t *Todo) ReloadPlannerState(lID backend.LabelID, date backend.Date) {
-	// Start Date is the first Sunday from the first of the month
-	// End Date is 41 days after it.
-	sDate := date
-	sDate.FirstDay()
-	sDate.ChangeDate(0, 0, -sDate.Weekday())
-	eDate := sDate.AddDate(0, 0, 41)
+// plannerLoadedMsg carries the grid entries for a requested month/label. It
+// echoes the request so the root can drop stale results when the user has
+// already moved on to another month or label.
+type plannerLoadedMsg struct {
+	LabelID backend.LabelID
+	NewDate backend.Date
+	sDate   backend.Date
+	entries map[string]string
+}
 
-	entries, _ := database.FetchGridEntries(
-		t.db, sDate, eDate, lID,
-	)
-	t.plannerModel.ReloadState(sDate, entries)
+// errMsg reports a failed asynchronous load.
+type errMsg struct{ err error }
+
+// loadPlanner fetches the calendar grid for a label/month off the main loop.
+func (t *Todo) loadPlanner(lID backend.LabelID, date backend.Date) tea.Cmd {
+	return func() tea.Msg {
+		// Start Date is the first Sunday from the first of the month.
+		// End Date is 41 days after it.
+		first := date.FirstDay()
+		sDate := first.AddDate(0, 0, -first.Weekday())
+		eDate := sDate.AddDate(0, 0, 41)
+
+		entries, err := database.FetchGridEntries(t.db, sDate, eDate, lID)
+		if err != nil {
+			return errMsg{err: err}
+		}
+		return plannerLoadedMsg{LabelID: lID, NewDate: date, sDate: sDate, entries: entries}
+	}
 }
 
 func (t *Todo) AddEntry(lID backend.LabelID, date backend.Date, msg string) {
-	database.AddEntry(t.db, date.FormatSQL(), string(lID), msg)
+	if err := database.AddEntry(t.db, date.FormatSQL(), string(lID), msg); err != nil {
+		t.err = err
+	}
 }
 
 func (t *Todo) RemoveEntry(lID backend.LabelID, date backend.Date) {
-	database.RemoveEntry(t.db, date.FormatSQL(), string(lID))
+	if err := database.RemoveEntry(t.db, date.FormatSQL(), string(lID)); err != nil {
+		t.err = err
+	}
 }
-
-// loadEntries fetches the visible month for the selected label and rebuilds
-// the calendar grid. On error the grid is rebuilt with no marks.
-// func (t *Todo) loadEntries() {
-// 	cal := &t.plannerModel.CalendarModel
-//
-// 	entries, err := database.FetchGrid(t.db, cal.SelectedDate, t.plannerModel.Labels.Selected)
-// 	t.err = err
-//
-// 	t.plannerModel.Entries = entries
-// 	cal.UpdateGrid(t.plannerModel.HasEntry)
-// }
-
-// // reloadGrid is loadEntries plus showing the selected day's entry in Notes.
-// func (t *Todo) reloadGrid() {
-// 	t.loadEntries()
-// 	t.plannerModel.SyncNotes()
-// }
-//
-// // saveEntry keeps Notes as it is, so the cursor doesn't jump while typing.
-// func (t *Todo) saveEntry(m planner.SaveEntryMsg) {
-// 	err := database.AddEntry(t.db, m.Date.FormatSQL(), string(m.Label), m.Msg)
-// 	if t.err = err; err != nil {
-// 		return
-// 	}
-// 	t.loadEntries()
-// }
-//
-// func (t *Todo) removeEntry(m planner.RemoveEntryMsg) {
-// 	err := database.RemoveEntry(t.db, m.Date.FormatSQL(), string(m.Label))
-// 	if t.err = err; err != nil {
-// 		return
-// 	}
-// 	t.reloadGrid()
-// }

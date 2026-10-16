@@ -32,14 +32,6 @@ const (
 	GroupDone
 )
 
-type Tone int
-
-const (
-	ToneNormal Tone = iota
-	ToneSoon
-	ToneLate
-)
-
 // Row is one todo, fully resolved by whoever loads it (colors, group, due text).
 // The view only draws it.
 type Row struct {
@@ -58,7 +50,20 @@ type Row struct {
 	Schedule   string // recurring rows: "M/W/F", "daily", "every 3d"
 
 	Due     string // "2d late", "today", "in 6d" ("" = nothing shown)
-	DueTone Tone
+	DueTone backend.Tone
+}
+
+// headingColor picks the foreground color for a group heading. Unselected
+// headings are muted; a selected heading pops in its own color — overdue in the
+// late color, every other group in the normal text color.
+func headingColor(g Group, selected bool, theme backend.Theme) backend.HexCode {
+	if !selected {
+		return theme.Dim
+	}
+	if g == GroupOverdue {
+		return theme.Late
+	}
+	return theme.Text
 }
 
 // GroupFor decides which heading a one-time todo sits under.
@@ -83,17 +88,17 @@ func GroupFor(due *backend.Date, done bool, today backend.Date) Group {
 }
 
 // DueInfo is the text for the right-hand column plus how to color it.
-func DueInfo(due, today backend.Date) (string, Tone) {
+func DueInfo(due, today backend.Date) (string, backend.Tone) {
 	days := today.DaysUntil(due)
 	switch {
 	case days < 0:
-		return fmt.Sprintf("%dd late", -days), ToneLate
+		return fmt.Sprintf("%dd late", -days), backend.ToneLate
 	case days == 0:
-		return "today", ToneSoon
+		return "today", backend.ToneSoon
 	case days == 1:
-		return "tmrw", ToneSoon
+		return "tmrw", backend.ToneSoon
 	default:
-		return fmt.Sprintf("in %dd", days), ToneNormal
+		return fmt.Sprintf("in %dd", days), backend.ToneNormal
 	}
 }
 
@@ -127,6 +132,19 @@ func visible(rows []Row, tab Tab, filter backend.LabelID) []Row {
 	return out
 }
 
+// groupCounts tallies visible rows per group for the heading "(n)" labels.
+// It counts every row in the tab, including those hidden by a collapsed group.
+func groupCounts(rows []Row, tab Tab, filter backend.LabelID) map[Group]int {
+	counts := map[Group]int{}
+	for _, r := range rows {
+		if r.Tab != tab || (filter != "" && r.LabelID != filter) {
+			continue
+		}
+		counts[r.Group]++
+	}
+	return counts
+}
+
 // openCounts is the number shown on each tab: rows not done yet.
 func openCounts(rows []Row, filter backend.LabelID) [tabCount]int {
 	var n [tabCount]int
@@ -135,22 +153,6 @@ func openCounts(rows []Row, filter backend.LabelID) [tabCount]int {
 			continue
 		}
 		n[r.Tab]++
-	}
-	return n
-}
-
-// barFill is how many of segs segments are filled. It never shows an empty bar
-// once something is done, or a full one before everything is.
-func barFill(done, total, segs int) int {
-	if total <= 0 {
-		return 0
-	}
-	n := (done*segs + total/2) / total
-	if done > 0 && n == 0 {
-		n = 1
-	}
-	if done < total && n == segs {
-		n = segs - 1
 	}
 	return n
 }

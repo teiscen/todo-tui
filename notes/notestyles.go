@@ -2,6 +2,7 @@ package notes
 
 import (
 	backend "todo-tui/backend"
+	"todo-tui/ui"
 
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
@@ -11,14 +12,12 @@ import (
 type NotesStyle struct {
 	Styles textarea.Styles
 
-	ColorText   backend.HexCode
-	ColorAccent backend.HexCode // Meant for anything extraneous such as Line numbers or Buffer
+	Theme backend.Theme
 }
 
 func (n NotesStyle) GenStyle() textarea.Styles {
-	cText := n.ColorText
-	cAccent := n.ColorAccent
-	// cCursor := n.ColorCursor
+	cText := n.Theme.Text
+	cAccent := n.Theme.Accent
 
 	cTextMute, err := cText.MuteColorTarget(backend.HexCode("#303446"), 0.4)
 	if err != nil {
@@ -31,30 +30,29 @@ func (n NotesStyle) GenStyle() textarea.Styles {
 
 	focused := textarea.StyleState{
 		Base:             lipgloss.NewStyle(), // Leave default and then later match the overall color scheme
-		Text:             cText.ToStyle(),
+		Text:             ui.Fg(cText),
 		LineNumber:       lipgloss.NewStyle(), // Not Used
 		CursorLineNumber: lipgloss.NewStyle(), // Not Used
 		CursorLine:       lipgloss.NewStyle().Background(lipgloss.Color(string(cAccentMute))),
-		EndOfBuffer:      cAccent.ToStyle(),
-		Placeholder:      cAccent.ToStyle(),
+		EndOfBuffer:      ui.Fg(cAccent),
+		Placeholder:      ui.Fg(cAccent),
 		Prompt:           lipgloss.NewStyle(), // Not Used
 	}
 
 	blurred := textarea.StyleState{
 		Base:             lipgloss.NewStyle(), // Leave default and then later match the overall color scheme
-		Text:             cTextMute.ToStyle(),
+		Text:             ui.Fg(cTextMute),
 		LineNumber:       lipgloss.NewStyle(), // Not Used
 		CursorLineNumber: lipgloss.NewStyle(), // Not Used
 		CursorLine:       lipgloss.NewStyle().Background(lipgloss.Color(string(cAccentMute))),
-		EndOfBuffer:      cAccentMute.ToStyle(),
-		Placeholder:      cAccent.ToStyle(),
+		EndOfBuffer:      ui.Fg(cAccentMute),
+		Placeholder:      ui.Fg(cAccent),
 		Prompt:           lipgloss.NewStyle(), // Not Used
 	}
 	cursor := textarea.CursorStyle{
 		Color: lipgloss.Color(string(cAccent)),
 		Shape: tea.CursorBar, // tea.CursorBlock, tea.CursorUnderline
 		Blink: false,
-		// BlinkSpeed: 500 * time.Millisecond, // Only matters if Blink is true
 	}
 
 	return textarea.Styles{
@@ -64,15 +62,11 @@ func (n NotesStyle) GenStyle() textarea.Styles {
 	}
 }
 
-func GetDefaultStyle() NotesStyle {
-	cText := backend.HexCode("#C6D0F5")
-	cAccent := backend.HexCode("#CA9EE6")
-
+// NewStyle builds a notes style from the shared theme.
+func NewStyle(theme backend.Theme) NotesStyle {
 	ns := NotesStyle{
 		Styles: textarea.Styles{},
-
-		ColorText:   cText,
-		ColorAccent: cAccent,
+		Theme:  theme,
 	}
 
 	ns.Styles = ns.GenStyle()

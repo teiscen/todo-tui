@@ -5,92 +5,264 @@ import (
 	"strings"
 
 	"todo-tui/backend"
+	"todo-tui/ui"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
+// Leftbox owns task-list selection, filtering, grouping, and row expansion state.
 type Leftbox struct {
 	Style  LeftboxStyle
 	Labels backend.Labels
 
-	Rows   []Row
-	Tab    Tab
-	Filter backend.LabelID // "" = all labels
-	Cursor int             // index into the visible rows
+	Rows      []Row
+	Tab       Tab
+	Filter    backend.LabelID // "" = all labels
+	Cursor    int             // index into the selectable entries (headings + rows)
+	Collapsed map[Group]bool
+	Expanded  map[int]bool
 }
 
-func NewLeftbox() Leftbox {
-	return Leftbox{Style: GetDefaultStyle()}
+// New initializes an empty list and its per-group/per-task UI state.
+func New(theme backend.Theme, labels backend.Labels, width, height int) Leftbox {
+	style := NewStyle(theme)
+	style.Width = width
+	style.Height = height
+	return Leftbox{Style: style, Labels: labels, Collapsed: map[Group]bool{}, Expanded: map[int]bool{}}
 }
 
 func (l Leftbox) Init() tea.Cmd {
 	return nil
 }
 
-// ReloadState swaps in freshly loaded rows and keeps the cursor on the screen.
+// ReloadState swaps in freshly loaded rows and keeps the same task selected
+// (by ID) when it is still visible; otherwise the cursor is clamped into range.
 func (l *Leftbox) ReloadState(rows []Row) {
+	var keepID int
+	keep := false
+	if cur, ok := l.Selected(); ok {
+		keepID, keep = cur.ID, true
+	}
 	l.Rows = rows
+	if keep {
+		for i, e := range l.selectableEntries() {
+			if !e.heading && e.row.ID == keepID {
+				l.Cursor = i
+				return
+			}
+		}
+	}
 	l.clampCursor()
 }
 
+// Selected returns the task row at Cursor, or ok=false when the cursor sits on
+// a section heading (or out of range).
 func (l Leftbox) Selected() (Row, bool) {
-	vis := visible(l.Rows, l.Tab, l.Filter)
-	if l.Cursor < 0 || l.Cursor >= len(vis) {
+	entries := l.selectableEntries()
+	if l.Cursor < 0 || l.Cursor >= len(entries) {
 		return Row{}, false
 	}
-	return vis[l.Cursor], true
+	e := entries[l.Cursor]
+	if e.heading {
+		return Row{}, false
+	}
+	return e.row, true
 }
 
-func (l Leftbox) View() tea.View {
-	s := l.Style
-	contentW := s.Width - 4   // border + 1 column of padding on each side
-	bodyH := s.Height - 2 - 2 // top line, bottom border, then filter bar + blank line
+// selectedGroup returns the group under the cursor, whether it is on the
+// group's heading or one of its tasks.
+func (l Leftbox) selectedGroup() (Group, bool) {
+	entries := l.selectableEntries()
+	if l.Cursor < 0 || l.Cursor >= len(entries) {
+		return 0, false
+	}
+	e := entries[l.Cursor]
+	if e.heading {
+		return e.group, true
+	}
+	return e.row.Group, true
+}
 
+// entry is one cursorable line in the task body: either a section heading or a
+// task row. Collapsed groups still contribute their heading so they can be
+// selected and expanded again.
+type entry struct {
+	heading bool
+	group   Group
+	row     Row
+}
+
+// selectableEntries lists headings and their non-collapsed tasks in display
+// order. The cursor navigates this list, so headings are reachable by j/k.
+func (l Leftbox) selectableEntries() []entry {
 	vis := visible(l.Rows, l.Tab, l.Filter)
-
-	var body []string
-	cursorLine := 0
+	out := make([]entry, 0, len(vis)+6)
 	prev := Group(-1)
-	for i, r := range vis {
+	for _, r := range vis {
 		if r.Group != prev {
-			if prev != -1 {
-				body = append(body, "")
-			}
-			body = append(body, l.groupHeading(r.Group))
+			out = append(out, entry{heading: true, group: r.Group})
 			prev = r.Group
 		}
+		if l.Collapsed[r.Group] {
+			continue
+		}
+		out = append(out, entry{row: r})
+	}
+	return out
+}
+
+// ── layout ─────────────────────────────────────────────────────────────
+
+// lineKind labels each body line so drawing and hover hit-testing consume the
+// same structure and can never disagree.
+type lineKind uint8
+
+const (
+	blankLine lineKind = iota
+	headingLine
+	itemLine
+	detailLine
+)
+
+// bodyLine is one rendered line of the task body. Heading and item lines carry
+// the selectable entry index; the other kinds are not interactive.
+type bodyLine struct {
+	kind  lineKind
+	text  string // rendered content, already styled
+	index int    // selectable entry index for headingLine/itemLine; -1 otherwise
+}
+
+// header returns the tab bar, the filter chips, and the trailing blank line
+// that separates them from the task body.
+func (l Leftbox) header(contentW int) []string {
+	header := append([]string{l.tabBar()}, l.filterLines(contentW)...)
+	return append(header, "")
+}
+
+// layout renders the grouped task body exactly once and returns it alongside
+// the body-line index of the selected entry (heading or task). View and HoverAt
+// both consume this single layout, so the keyboard cursor, drawing, and mouse
+// hover always agree.
+func (l Leftbox) layout(contentW int) ([]bodyLine, int) {
+	entries := l.selectableEntries()
+	counts := groupCounts(l.Rows, l.Tab, l.Filter)
+	body := make([]bodyLine, 0, len(entries))
+	cursorLine := 0
+	prev := Group(-1)
+
+	for i, e := range entries {
+		if e.heading {
+			if prev != -1 {
+				body = append(body, bodyLine{kind: blankLine})
+			}
+			body = append(body, bodyLine{
+				kind:  headingLine,
+				index: i,
+				text:  l.groupHeading(e.group, counts[e.group], i == l.Cursor),
+			})
+			prev = e.group
+			if i == l.Cursor {
+				cursorLine = len(body) - 1
+			}
+			continue
+		}
+
+		r := e.row
 		if i == l.Cursor {
 			cursorLine = len(body)
 		}
-		body = append(body, l.renderRow(r, i == l.Cursor, contentW))
+		marker := "▸ "
+		if l.Expanded[r.ID] {
+			marker = "▾ "
+		}
+		body = append(body, bodyLine{
+			kind:  itemLine,
+			index: i,
+			text:  marker + l.renderRow(r, i == l.Cursor, contentW-2),
+		})
+		if l.Expanded[r.ID] {
+			body = append(body, bodyLine{kind: detailLine, text: l.detailLine(r, contentW)})
+		}
 	}
+
 	if len(body) == 0 {
-		body = []string{s.ColorDim.ToStyle().Render("nothing here")}
+		body = []bodyLine{{kind: blankLine, text: ui.Fg(l.Style.Theme.Dim).Render("nothing here")}}
 	}
+	return body, cursorLine
+}
+
+// detailLine is the expanded row's sub-line (progress or "No subtasks").
+func (l Leftbox) detailLine(r Row, contentW int) string {
+	detail := "  No subtasks"
+	if r.StepsTotal > 0 {
+		detail = fmt.Sprintf("  Progress: %d/%d steps completed", r.StepsDone, r.StepsTotal)
+	}
+	if r.Schedule != "" {
+		detail += " · " + r.Schedule
+	}
+	return ui.Fg(l.Style.Theme.Dim).Render(ansi.Truncate(detail, contentW, "…"))
+}
+
+// View renders the tab/filter header, grouped task rows, and keyboard hints.
+func (l Leftbox) View() string {
+	s := l.Style
+	contentW := s.Width - 4 // border + 1 column of padding on each side
+	header := l.header(contentW)
+	bodyH := s.Height - 2 - len(header)
+
+	body, cursorLine := l.layout(contentW)
 	start := windowStart(len(body), cursorLine, bodyH)
 	body = body[start:min(len(body), start+bodyH)]
 
-	lines := append([]string{l.filterBar(contentW), ""}, body...)
+	lines := make([]string, 0, len(header)+len(body))
+	lines = append(lines, header...)
+	for _, line := range body {
+		lines = append(lines, line.text)
+	}
 
-	top := backend.GenBorder(
-		l.tabBar(),
-		s.ColorBorder.ToStyle(),
-		backend.Top,
+	top := ui.GenBorder(
+		" Tasks ",
+		ui.Fg(s.Theme.Border),
+		ui.Top,
 		s.Width-2,
 	)
 	box := lipgloss.NewStyle().
 		Width(s.Width).
 		Height(s.Height-1).
 		Padding(0, 1).
-		BorderForeground(lipgloss.Color(string(s.ColorBorder))).
+		BorderForeground(lipgloss.Color(string(s.Theme.Border))).
 		Border(lipgloss.RoundedBorder(), false, true, true, true)
 
 	content := box.Render(strings.Join(lines, "\n"))
-	return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, top, content))
+	return lipgloss.JoinVertical(lipgloss.Left, top, content)
 }
 
+// HoverAt maps a terminal Y coordinate to a selectable entry (heading or task)
+// in the left panel, using the same layout the View draws.
+func (l *Leftbox) HoverAt(y int) bool {
+	contentW := l.Style.Width - 4
+	header := l.header(contentW)
+	bodyH := l.Style.Height - 2 - len(header)
+
+	body, cursorLine := l.layout(contentW)
+	start := windowStart(len(body), cursorLine, bodyH)
+	body = body[start:min(len(body), start+bodyH)]
+
+	index := y - (1 + len(header))
+	if index < 0 || index >= len(body) {
+		return false
+	}
+	line := body[index]
+	if (line.kind != itemLine && line.kind != headingLine) || line.index == l.Cursor {
+		return false
+	}
+	l.Cursor = line.index
+	return true
+}
+
+// Update handles list navigation and emits commands for selection or completion.
 func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
@@ -100,27 +272,58 @@ func (l Leftbox) Update(msg tea.Msg) (Leftbox, tea.Cmd) {
 	case "j", "down":
 		l.Cursor++
 		l.clampCursor()
-		return l, l.selectCmd()
+		return l, nil
 	case "k", "up":
 		l.Cursor--
 		l.clampCursor()
-		return l, l.selectCmd()
-	case "]":
+		return l, nil
+	case "]", "right_bracket", "close_bracket":
 		l.Tab = (l.Tab + 1) % tabCount
 		l.Cursor = 0
-		return l, l.selectCmd()
-	case "[":
+		return l, nil
+	case "[", "left_bracket", "open_bracket":
 		l.Tab = (l.Tab + tabCount - 1) % tabCount
 		l.Cursor = 0
-		return l, l.selectCmd()
+		return l, nil
 	case "f":
 		l.stepFilter()
 		l.Cursor = 0
-		return l, l.selectCmd()
+		return l, nil
 	case " ", "space":
 		return l, l.toggleCmd()
+	case "enter":
+		l.toggleSelectedGroup()
+		return l, nil
+	case "e":
+		if r, ok := l.Selected(); ok {
+			if l.Expanded == nil {
+				l.Expanded = map[int]bool{}
+			}
+			l.Expanded[r.ID] = !l.Expanded[r.ID]
+		}
 	}
 	return l, nil
+}
+
+// toggleSelectedGroup expands or collapses the section under the cursor, then
+// parks the cursor on that section's heading so a collapse never strands it
+// inside a hidden group.
+func (l *Leftbox) toggleSelectedGroup() {
+	g, ok := l.selectedGroup()
+	if !ok {
+		return
+	}
+	if l.Collapsed == nil {
+		l.Collapsed = map[Group]bool{}
+	}
+	l.Collapsed[g] = !l.Collapsed[g]
+	for i, e := range l.selectableEntries() {
+		if e.heading && e.group == g {
+			l.Cursor = i
+			return
+		}
+	}
+	l.clampCursor()
 }
 
 // ── drawing ─────────────────────────────────────────────────────────────
@@ -134,31 +337,65 @@ func (l Leftbox) tabBar() string {
 	for i := range tabCount {
 		label := fmt.Sprintf("%s %d", tabNames[i], counts[i])
 		if Tab(i) == l.Tab {
-			parts = append(parts, s.ColorAccent.ToStyle().Bold(true).Render("["+label+"]"))
+			parts = append(parts, ui.Fg(s.Theme.Accent).Bold(true).Render("["+label+"]"))
 		} else {
-			parts = append(parts, s.ColorDim.ToStyle().Render(" "+label+" "))
+			parts = append(parts, ui.Fg(s.Theme.Dim).Render(" "+label+" "))
 		}
 	}
 	return strings.Join(parts, " ")
 }
 
-// filterBar: [all] uni work gym ..., each label in its own color.
-func (l Leftbox) filterBar(width int) string {
+// filterLines renders colored label chips and wraps them onto as many lines as needed.
+func (l Leftbox) filterLines(width int) []string {
 	s := l.Style
-	item := func(name string, color backend.HexCode, active bool) string {
+	chips := []string{}
+	chipWidths := []int{}
+	add := func(name string, color backend.HexCode, active bool) {
+		text := " " + name + " "
 		if active {
-			return color.ToStyle().Bold(true).Render("[" + name + "]")
+			text = "[" + name + "]"
 		}
-		return color.ToStyle().Render(" " + name + " ")
+		chips = append(chips, ui.Fg(color).Bold(active).Render(text))
+		chipWidths = append(chipWidths, lipgloss.Width(text))
 	}
-	parts := []string{item("all", s.ColorText, l.Filter == "")}
+	add("all", s.Theme.Text, l.Filter == "")
 	for _, id := range l.Labels.Order {
-		parts = append(parts, item(string(id), l.Labels.Info[id].Color, l.Filter == id))
+		add(string(id), l.Labels.Info[id].Color, l.Filter == id)
 	}
-	return ansi.Truncate(strings.Join(parts, ""), width, "…")
+	var lines []string
+	line := ""
+	lineWidth := 0
+	for i, chip := range chips {
+		w := chipWidths[i]
+		gap := 1
+		if line == "" {
+			gap = 0
+		}
+		if line != "" && lineWidth+gap+w > width {
+			lines = append(lines, line)
+			line, lineWidth = chip, w
+			continue
+		}
+		if gap > 0 {
+			line += " "
+			lineWidth++
+		}
+		line += chip
+		lineWidth += w
+	}
+	if line != "" {
+		lines = append(lines, line)
+	}
+	if len(lines) == 0 {
+		return []string{""}
+	}
+	return lines
 }
 
-func (l Leftbox) groupHeading(g Group) string {
+// groupHeading styles a group title. Unselected headings are muted; the heading
+// under the cursor or hover pops in its own color (overdue in the late color,
+// every other group in the text color).
+func (l Leftbox) groupHeading(g Group, count int, selected bool) string {
 	s := l.Style
 	name := map[Group]string{
 		GroupOverdue: "OVERDUE",
@@ -171,23 +408,27 @@ func (l Leftbox) groupHeading(g Group) string {
 	if l.Tab == TabRecurring && g == GroupLater {
 		name = "OTHER DAYS"
 	}
-	color := s.ColorDim
-	if g == GroupOverdue {
-		color = s.ColorLate
+	marker := "▾"
+	if l.Collapsed[g] {
+		marker = "▸"
 	}
-	return color.ToStyle().Bold(true).Render(name)
+	name = fmt.Sprintf("%s %s (%d)", marker, name, count)
+	color := headingColor(g, selected, s.Theme)
+	return ui.Fg(color).Bold(true).Render(name)
 }
 
 // renderRow lays out one row as fixed columns:
 //
 //	▸ [ ] Title…            tag  ▰▰▱▱ 3/5   2d late
+//
+// renderRow aligns each task's title, label, progress/schedule, and due-date columns.
 func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 	s := l.Style
-	dim := s.ColorDim.ToStyle()
+	dim := ui.Fg(s.Theme.Dim)
 
 	marker := " "
 	if selected {
-		marker = s.ColorAccent.ToStyle().Bold(true).Render(s.CursorChar)
+		marker = ui.Fg(s.Theme.Accent).Bold(true).Render(s.CursorChar)
 	}
 	check := s.CheckOpen
 	if r.Done {
@@ -197,7 +438,7 @@ func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 	// marker + space + checkbox + space, then 3 single-space gaps between columns.
 	titleW := width - (1 + 1 + lipgloss.Width(check) + 1) - 3 - s.TagWidth - s.ProgWidth - s.DueWidth
 
-	titleStyle := s.ColorText.ToStyle()
+	titleStyle := ui.Fg(s.Theme.Text)
 	switch {
 	case r.Done:
 		titleStyle = dim.Strikethrough(true)
@@ -206,45 +447,38 @@ func (l Leftbox) renderRow(r Row, selected bool, width int) string {
 	}
 	title := titleStyle.Render(ansi.Truncate(r.Title, titleW, "…"))
 
-	tagStyle, accent := dim, s.ColorAccent
+	tagStyle, accent := dim, s.Theme.Accent
 	if r.Color != "" {
-		tagStyle, accent = r.Color.ToStyle(), r.Color
+		tagStyle, accent = ui.Fg(r.Color), r.Color
 	}
 	tag := tagStyle.Render(ansi.Truncate(string(r.LabelID), s.TagWidth, ""))
 
 	prog := ""
 	switch {
 	case r.StepsTotal > 0:
-		n := barFill(r.StepsDone, r.StepsTotal, s.BarSegs)
-		prog = accent.ToStyle().Render(strings.Repeat(s.BarFull, n)) +
+		n := ui.BarFill(r.StepsDone, r.StepsTotal, s.BarSegs)
+		prog = ui.Fg(accent).Render(strings.Repeat(s.BarFull, n)) +
 			dim.Render(strings.Repeat(s.BarEmpty, s.BarSegs-n)+
 				fmt.Sprintf(" %d/%d", r.StepsDone, r.StepsTotal))
 	case r.Schedule != "":
 		prog = dim.Render(ansi.Truncate(r.Schedule, s.ProgWidth, ""))
 	}
 
-	due := s.ToneColor(r.DueTone).ToStyle().Render(r.Due)
+	due := ui.Fg(s.Theme.ToneColor(r.DueTone)).Render(r.Due)
 
 	return strings.Join([]string{
-		marker + " " + check + " " + padRight(title, titleW),
-		padRight(tag, s.TagWidth),
-		padRight(prog, s.ProgWidth),
-		padLeft(due, s.DueWidth),
+		marker + " " + check + " " + ui.PadRight(title, titleW),
+		ui.PadRight(tag, s.TagWidth),
+		ui.PadRight(prog, s.ProgWidth),
+		ui.PadLeft(due, s.DueWidth),
 	}, " ")
 }
 
 // ── small helpers ───────────────────────────────────────────────────────
 
-func padRight(s string, w int) string {
-	return s + strings.Repeat(" ", max(0, w-lipgloss.Width(s)))
-}
-
-func padLeft(s string, w int) string {
-	return strings.Repeat(" ", max(0, w-lipgloss.Width(s))) + s
-}
-
+// clampCursor keeps selection within the currently visible entry range.
 func (l *Leftbox) clampCursor() {
-	n := len(visible(l.Rows, l.Tab, l.Filter))
+	n := len(l.selectableEntries())
 	l.Cursor = max(0, min(l.Cursor, n-1))
 }
 

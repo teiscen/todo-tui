@@ -5,13 +5,6 @@ import (
 	"todo-tui/calendar"
 )
 
-// GridStart is the first cell of a 6x7 (Sunday-first) month grid: the Sunday
-// on or before the 1st of d's month.
-// func GridStart(d backend.Date) backend.Date {
-// 	first := d.FirstDay()
-// 	return first.AddDate(0, 0, -int(first.Weekday()))
-// }
-
 func (p *Planner) SelectedDate() *backend.Date {
 	return &p.CalendarModel.SelectedDate
 }
@@ -52,7 +45,7 @@ func (p *Planner) UpdateCalendarState(sDate backend.Date) {
 		for col := range state[row] {
 			_, ok := p.Entries[sDate.Key()]
 			state[row][col] = calendar.Info{Date: sDate, IsMarked: ok}
-			sDate.ChangeDate(0, 0, 1)
+			sDate = sDate.AddDate(0, 0, 1)
 		}
 	}
 }
